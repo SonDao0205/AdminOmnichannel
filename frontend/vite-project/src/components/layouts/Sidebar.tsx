@@ -1,11 +1,6 @@
 import {
-  ApiOutlined,
-  AppstoreOutlined,
-  BarChartOutlined,
-  CustomerServiceOutlined,
   DownOutlined,
   LogoutOutlined,
-  ProductOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
@@ -19,45 +14,18 @@ type NavigationItem = {
   label: string
   to: string
   icon: ReactNode
-  notification?: boolean
 }
 
 const navigationItems: NavigationItem[] = [
   {
-    label: 'Tổng quan',
-    to: ROUTES.overview,
-    icon: <AppstoreOutlined />,
-  },
-  {
-    label: 'Hội thoại (Chat)',
-    to: ROUTES.chat,
-    icon: <CustomerServiceOutlined />,
-    notification: true,
-  },
-  {
-    label: 'Liên kết sàn',
-    to: ROUTES.connect,
-    icon: <ApiOutlined />,
-  },
-  {
-    label: 'Quản lý Sản phẩm',
-    to: ROUTES.products,
-    icon: <ProductOutlined />,
-  },
-  {
-    label: 'Quản lý Đơn hàng',
-    to: ROUTES.orders,
-    icon: <ShoppingCartOutlined />,
-  },
-  {
-    label: 'Khách hàng CRM',
-    to: ROUTES.customers,
+    label: 'Tài khoản',
+    to: ROUTES.account,
     icon: <TeamOutlined />,
   },
   {
-    label: 'Báo cáo phân tích',
-    to: ROUTES.analytics,
-    icon: <BarChartOutlined />,
+    label: 'Gói cước',
+    to: ROUTES.plan,
+    icon: <ShoppingCartOutlined />,
   },
 ]
 
@@ -102,7 +70,7 @@ export default function Sidebar() {
   return (
     <aside className="app-sidebar">
       <div className="app-brand">
-        <NavLink className="app-logo" to={ROUTES.overview}>
+        <NavLink className="app-logo" to={ROUTES.account}>
           <span className="app-logo-mark" aria-hidden="true">
             <ShopOutlined />
           </span>
@@ -126,12 +94,6 @@ export default function Sidebar() {
               {item.icon}
             </span>
             <span className="app-nav-label">{item.label}</span>
-            {item.notification ? (
-              <span
-                className="app-nav-notification"
-                aria-label="Có thông báo mới"
-              />
-            ) : null}
           </NavLink>
         ))}
       </nav>

@@ -1,14 +1,9 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
 import AppLayout from '../components/layouts/AppLayout'
-import AnalystScreen from '../pages/analyst/AnalystScreen'
 import LoginScreen from '../pages/auth/LoginScreen'
-import ChatScreen from '../pages/chat/ChatScreen'
-import ConnectScreen from '../pages/connect/ConnectScreen'
-import CustomerScreen from '../pages/customer/CustomerScreen'
-import OrderScreen from '../pages/order/OrderScreen'
-import OverviewScreen from '../pages/overview/OverviewScreen'
-import ProductScreen from '../pages/products/ProductScreen'
 import { ROUTES } from './paths'
+import PlansScreen from '../pages/plan/PlansScreen'
+import AccountsScreen from '../pages/accounts/AccountsScreen'
 
 export const router = createBrowserRouter([
   {
@@ -21,40 +16,20 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate replace to={ROUTES.overview} />,
+        element: <Navigate replace to={ROUTES.account} />,
       },
       {
-        path: ROUTES.overview,
-        element: <OverviewScreen />,
+        path: ROUTES.plan,
+        element: <PlansScreen />
       },
       {
-        path: ROUTES.connect,
-        element: <ConnectScreen />,
-      },
-      {
-        path: ROUTES.products,
-        element: <ProductScreen />,
-      },
-      {
-        path: ROUTES.orders,
-        element: <OrderScreen />,
-      },
-      {
-        path: ROUTES.customers,
-        element: <CustomerScreen />,
-      },
-      {
-        path: ROUTES.chat,
-        element: <ChatScreen />,
-      },
-      {
-        path: ROUTES.analytics,
-        element: <AnalystScreen />,
-      },
+        path: ROUTES.account,
+        element: <AccountsScreen />
+      }
     ],
   },
   {
-    path: '*',
-    element: <Navigate replace to={ROUTES.overview} />,
-  },
+    path: "*",
+    element: <Navigate replace to={ROUTES.account} />,
+  }
 ])
