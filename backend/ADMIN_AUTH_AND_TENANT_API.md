@@ -172,6 +172,78 @@ API tạo đồng thời:
 `temporaryPassword` chỉ được trả về trong response tạo tenant. Không log và
 không lưu plaintext. Tenant user bị buộc đổi mật khẩu ở lần đăng nhập đầu.
 
+### Quản lý gói dịch vụ
+
+Tất cả API dưới đây yêu cầu cookie `omni_admin_session`. Các request thay đổi
+dữ liệu còn phải gửi cookie và header CSRF.
+
+Tạo plan:
+
+```http
+POST /api/admin/plans
+Content-Type: application/json
+X-XSRF-TOKEN: csrf-token
+
+{
+  "planCode": "STARTER",
+  "planName": "Gói Starter",
+  "billingPeriod": "MONTHLY",
+  "priceAmount": 99000,
+  "currency": "VND",
+  "limits": {
+    "marketplaceAccounts": 2,
+    "tenantUsers": 5
+  },
+  "features": {
+    "aiSale": true,
+    "analytics": true
+  },
+  "status": "ACTIVE"
+}
+```
+
+Danh sách có tìm kiếm, trạng thái và phân trang:
+
+```http
+GET /api/admin/plans?search=starter&status=ACTIVE&page=0&size=20
+```
+
+Xem chi tiết:
+
+```http
+GET /api/admin/plans/{planId}
+```
+
+Cập nhật toàn bộ cấu hình:
+
+```http
+PUT /api/admin/plans/{planId}
+Content-Type: application/json
+X-XSRF-TOKEN: csrf-token
+```
+
+Body của `PUT` giống `POST`.
+
+Đổi trạng thái:
+
+```http
+PATCH /api/admin/plans/{planId}/status
+Content-Type: application/json
+X-XSRF-TOKEN: csrf-token
+
+{
+  "status": "ARCHIVED"
+}
+```
+
+Giá trị hợp lệ:
+
+- `billingPeriod`: `MONTHLY`, `QUARTERLY`, `YEARLY`, `CUSTOM`.
+- `status`: `ACTIVE`, `INACTIVE`, `ARCHIVED`.
+
+Không xóa vật lý plan vì `tenant_subscriptions` có thể đang tham chiếu. Dùng
+`ARCHIVED` để loại plan khỏi danh sách gói được phép cấp mới.
+
 ## 3. Frontend Axios
 
 ```ts

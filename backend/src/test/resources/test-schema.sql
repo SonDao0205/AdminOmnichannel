@@ -30,7 +30,14 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     id VARCHAR(36) PRIMARY KEY,
     plan_code VARCHAR(50) NOT NULL UNIQUE,
     plan_name VARCHAR(150) NOT NULL DEFAULT 'Test plan',
-    status VARCHAR(20) NOT NULL
+    billing_period VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
+    price_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'VND',
+    limits_json JSON NOT NULL,
+    features_json JSON NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS tenant_subscriptions (

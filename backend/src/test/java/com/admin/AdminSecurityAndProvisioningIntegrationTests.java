@@ -11,12 +11,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
+import java.util.Map;
+
 import jakarta.servlet.http.Cookie;
 
 import com.admin.dto.CreateTenantRequest;
+import com.admin.dto.SubscriptionPlanRequest;
+import com.admin.exception.SubscriptionPlanConflictException;
+import com.admin.exception.SubscriptionPlanNotFoundException;
 import com.admin.exception.TenantConflictException;
 import com.admin.security.PlatformAdminPrincipal;
 import com.admin.service.AdminAuthenticationService;
+import com.admin.service.SubscriptionPlanService;
 import com.admin.service.TenantProvisioningService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +55,9 @@ class AdminSecurityAndProvisioningIntegrationTests {
     TenantProvisioningService provisioningService;
 
     @Autowired
+    SubscriptionPlanService planService;
+
+    @Autowired
     MockMvc mockMvc;
 
     @BeforeEach
@@ -74,7 +84,12 @@ class AdminSecurityAndProvisioningIntegrationTests {
                 ADMIN_ID,
                 passwordEncoder.encode("Strong-owner-2026!"));
         jdbcTemplate.update(
-                "INSERT INTO subscription_plans (id, plan_code, status) VALUES (?, 'DEMO', 'ACTIVE')",
+                """
+                INSERT INTO subscription_plans (
+                    id, plan_code, plan_name, billing_period, price_amount,
+                    currency, limits_json, features_json, status
+                ) VALUES (?, 'DEMO', 'Demo plan', 'MONTHLY', 0, 'VND', '{}', '{}', 'ACTIVE')
+                """,
                 "10000000-0000-0000-0000-000000000001");
         jdbcTemplate.update(
                 """
@@ -158,6 +173,68 @@ class AdminSecurityAndProvisioningIntegrationTests {
     }
 
     @Test
+    void planApiRequiresAdminSessionAndCreatesThenListsPlan() throws Exception {
+        mockMvc.perform(get("/api/admin/plans"))
+                .andExpect(status().isUnauthorized());
+
+        var csrfResponse = mockMvc.perform(get("/api/admin/auth/csrf"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse();
+        Cookie csrfCookie = csrfResponse.getCookie("XSRF-TOKEN");
+        String csrfToken = csrfResponse.getContentAsString()
+                .replaceFirst(".*\"token\":\"([^\"]+)\".*", "$1");
+
+        var loginResponse = mockMvc.perform(post("/api/admin/auth/login")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "owner@example.com",
+                                  "password": "Strong-owner-2026!"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse();
+        Cookie sessionCookie = loginResponse.getCookie("omni_admin_session");
+
+        mockMvc.perform(post("/api/admin/plans")
+                        .cookie(csrfCookie, sessionCookie)
+                        .header("X-XSRF-TOKEN", csrfToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "planCode": "starter",
+                                  "planName": "Gói Starter",
+                                  "billingPeriod": "MONTHLY",
+                                  "priceAmount": 99000,
+                                  "currency": "VND",
+                                  "limits": {
+                                    "marketplaceAccounts": 2,
+                                    "tenantUsers": 5
+                                  },
+                                  "features": {
+                                    "aiSale": true
+                                  },
+                                  "status": "ACTIVE"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.planCode").value("STARTER"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        mockMvc.perform(get("/api/admin/plans")
+                        .cookie(sessionCookie)
+                        .param("search", "starter")
+                        .param("status", "ACTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.items[0].planCode").value("STARTER"));
+    }
+
+    @Test
     void repeatedInvalidPasswordsLockThePlatformOwner() {
         for (int attempt = 0; attempt < 5; attempt++) {
             assertFalse(authenticationService.login(
@@ -225,6 +302,87 @@ class AdminSecurityAndProvisioningIntegrationTests {
         assertEquals(1, page.totalElements());
         assertEquals("SHOP_001", page.items().get(0).tenantCode());
         assertEquals("manager@shop001.example", page.items().get(0).ownerEmail());
+    }
+
+    @Test
+    void managesSubscriptionPlanLifecycleWithoutPhysicalDeletion() {
+        PlatformAdminPrincipal principal =
+                new PlatformAdminPrincipal(ADMIN_ID, "owner@example.com", "Owner", "session-id");
+        SubscriptionPlanRequest createRequest = new SubscriptionPlanRequest(
+                "growth_monthly",
+                "Gói Growth",
+                "MONTHLY",
+                new BigDecimal("199000.00"),
+                "vnd",
+                Map.of("marketplaceAccounts", 4, "tenantUsers", 25),
+                Map.of("aiSale", true, "analytics", true),
+                "ACTIVE");
+
+        var created = planService.create(createRequest, principal, "127.0.0.1");
+        assertEquals("GROWTH_MONTHLY", created.planCode());
+        assertEquals("Gói Growth", created.planName());
+        assertEquals("VND", created.currency());
+        assertEquals(4, created.limits().get("marketplaceAccounts"));
+        assertEquals(true, created.features().get("aiSale"));
+
+        var page = planService.list("growth", "ACTIVE", 0, 20);
+        assertEquals(1, page.totalElements());
+        assertEquals(created.planId(), page.items().get(0).planId());
+
+        SubscriptionPlanRequest updateRequest = new SubscriptionPlanRequest(
+                "growth_yearly",
+                "Gói Growth theo năm",
+                "YEARLY",
+                new BigDecimal("1990000.00"),
+                "VND",
+                Map.of("marketplaceAccounts", 8, "tenantUsers", 50),
+                Map.of("aiSale", true, "analytics", true, "dailyEmail", true),
+                "INACTIVE");
+        var updated = planService.update(
+                created.planId(),
+                updateRequest,
+                principal,
+                "127.0.0.1");
+        assertEquals("GROWTH_YEARLY", updated.planCode());
+        assertEquals("YEARLY", updated.billingPeriod());
+        assertEquals("INACTIVE", updated.status());
+
+        var archived = planService.updateStatus(
+                created.planId(),
+                "ARCHIVED",
+                principal,
+                "127.0.0.1");
+        assertEquals("ARCHIVED", archived.status());
+        assertEquals(2, count("subscription_plans"));
+
+        assertThrows(
+                SubscriptionPlanConflictException.class,
+                () -> planService.create(
+                        new SubscriptionPlanRequest(
+                                "demo",
+                                "Duplicate demo",
+                                "MONTHLY",
+                                BigDecimal.ZERO,
+                                "VND",
+                                Map.of(),
+                                Map.of(),
+                                "ACTIVE"),
+                        principal,
+                        "127.0.0.1"));
+        assertThrows(
+                SubscriptionPlanNotFoundException.class,
+                () -> planService.get("missing-plan-id"));
+
+        Integer auditCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM security_audit_logs
+                WHERE target_type = 'SUBSCRIPTION_PLAN'
+                  AND target_id = ?
+                """,
+                Integer.class,
+                created.planId());
+        assertEquals(3, auditCount);
     }
 
     private int count(String tableName) {

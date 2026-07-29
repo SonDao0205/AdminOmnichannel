@@ -41,14 +41,29 @@ public class ApiExceptionHandler {
         return problem;
     }
 
-    @ExceptionHandler({TenantConflictException.class, DataIntegrityViolationException.class})
+    @ExceptionHandler({
+            TenantConflictException.class,
+            SubscriptionPlanConflictException.class,
+            DataIntegrityViolationException.class
+    })
     ProblemDetail handleConflict(Exception exception) {
         String detail = exception instanceof TenantConflictException
+                        || exception instanceof SubscriptionPlanConflictException
                 ? exception.getMessage()
                 : "The requested record conflicts with existing data.";
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
         problem.setTitle("Conflict");
         problem.setType(URI.create("urn:omnichannel:problem:conflict"));
+        return problem;
+    }
+
+    @ExceptionHandler(SubscriptionPlanNotFoundException.class)
+    ProblemDetail handlePlanNotFound(SubscriptionPlanNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage());
+        problem.setTitle("Subscription plan not found");
+        problem.setType(URI.create("urn:omnichannel:problem:subscription-plan-not-found"));
         return problem;
     }
 
