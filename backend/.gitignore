@@ -36,5 +36,8 @@ out/
 ### VS Code ###
 .vscode/
 
-# Custom ignores
+# Local secrets
+.env
+.env.*
+!.env.example
 src/main/resources/application.properties

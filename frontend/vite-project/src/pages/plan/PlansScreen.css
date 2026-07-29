@@ -998,3 +998,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Spinner for Loading State */
+.tenant-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: plans-spin 800ms linear infinite;
+}
+
+@keyframes plans-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   PlusOutlined,
   SearchOutlined,
@@ -6,11 +6,9 @@ import {
   EditOutlined,
   DeleteOutlined,
   ThunderboltOutlined,
-  RobotOutlined,
   CrownOutlined,
   ShopOutlined,
   TeamOutlined,
-  DollarOutlined,
   BarChartOutlined,
   CheckCircleOutlined,
   StopOutlined,
@@ -22,179 +20,50 @@ import Swal from 'sweetalert2'
 import type { SubscriptionPlan, BillingPeriod, PlanStatus, PlanLimits } from './plan.types'
 import PlanFormModal from './PlanFormModal'
 import AIQuotaModal from './AIQuotaModal'
+import {
+  getPlans,
+  createPlan,
+  updatePlan,
+  updatePlanStatus,
+  getApiErrorMessage
+} from '../../apis/adminApi'
 import './PlansScreen.css'
 
-// MOCK INITIAL DATA based on `subscription_plans` DB Schema
-const INITIAL_PLANS: SubscriptionPlan[] = [
-  {
-    id: 'p-001',
-    plan_code: 'STARTER_AI',
-    plan_name: 'Gói Khởi Tạo AI POS',
-    billing_period: 'MONTHLY',
-    price_amount: 290000,
-    currency: 'VND',
-    status: 'ACTIVE',
-    active_tenants_count: 14,
-    created_at: '2026-01-15T08:00:00.000Z',
-    updated_at: '2026-07-20T10:30:00.000Z',
-    is_popular: false,
-    limits: {
-      ai_monthly_tokens: 500000,
-      ai_daily_runs: 200,
-      ai_max_kb_docs: 10,
-      ai_max_rag_chunks: 2000,
-      ai_allowed_models: ['GPT-4o-mini'],
-      max_marketplace_accounts: 2,
-      max_tenant_users: 3,
-      max_products: 1000,
-      max_monthly_orders: 2000
-    },
-    features: {
-      allow_ai_auto_reply: true,
-      allow_rag_knowledge: false,
-      allow_post_purchase_care: false,
-      allow_multi_channel_sync: true,
-      allow_analytics_alerts: false,
-      allow_priority_support: false,
-      custom_ai_prompt: false
-    }
-  },
-  {
-    id: 'p-002',
-    plan_code: 'PRO_OMNI_AI',
-    plan_name: 'Gói Chuyên Nghiệp Omnichannel AI',
-    billing_period: 'MONTHLY',
-    price_amount: 990000,
-    currency: 'VND',
-    status: 'ACTIVE',
-    active_tenants_count: 42,
-    created_at: '2026-01-10T08:00:00.000Z',
-    updated_at: '2026-07-25T14:20:00.000Z',
-    is_popular: true,
-    limits: {
-      ai_monthly_tokens: 3500000,
-      ai_daily_runs: 1500,
-      ai_max_kb_docs: 50,
-      ai_max_rag_chunks: 10000,
-      ai_allowed_models: ['GPT-4o-mini', 'GPT-4o', 'Claude-3.5-Sonnet'],
-      max_marketplace_accounts: 5,
-      max_tenant_users: 10,
-      max_products: 10000,
-      max_monthly_orders: 20000
-    },
-    features: {
-      allow_ai_auto_reply: true,
-      allow_rag_knowledge: true,
-      allow_post_purchase_care: true,
-      allow_multi_channel_sync: true,
-      allow_analytics_alerts: true,
-      allow_priority_support: false,
-      custom_ai_prompt: true
-    }
-  },
-  {
-    id: 'p-003',
-    plan_code: 'ENTERPRISE_RAG',
-    plan_name: 'Gói Doanh Nghiệp & RAG Advanced',
-    billing_period: 'YEARLY',
-    price_amount: 29900000,
-    currency: 'VND',
-    status: 'ACTIVE',
-    active_tenants_count: 18,
-    created_at: '2026-02-01T08:00:00.000Z',
-    updated_at: '2026-07-28T09:15:00.000Z',
-    is_popular: false,
-    limits: {
-      ai_monthly_tokens: 20000000,
-      ai_daily_runs: 8000,
-      ai_max_kb_docs: 300,
-      ai_max_rag_chunks: 50000,
-      ai_allowed_models: ['GPT-4o-mini', 'GPT-4o', 'Claude-3.5-Sonnet', 'Gemini-1.5-Pro'],
-      max_marketplace_accounts: 25,
-      max_tenant_users: 50,
-      max_products: 100000,
-      max_monthly_orders: 200000
-    },
-    features: {
-      allow_ai_auto_reply: true,
-      allow_rag_knowledge: true,
-      allow_post_purchase_care: true,
-      allow_multi_channel_sync: true,
-      allow_analytics_alerts: true,
-      allow_priority_support: true,
-      custom_ai_prompt: true
-    }
-  },
-  {
-    id: 'p-004',
-    plan_code: 'FREE_TRIAL_14D',
-    plan_name: 'Gói Trải Nghiệm Dùng Thử 14 Ngày',
-    billing_period: 'MONTHLY',
-    price_amount: 0,
-    currency: 'VND',
-    status: 'ACTIVE',
-    active_tenants_count: 28,
-    created_at: '2026-01-01T08:00:00.000Z',
-    updated_at: '2026-07-26T16:00:00.000Z',
-    is_popular: false,
-    limits: {
-      ai_monthly_tokens: 150000,
-      ai_daily_runs: 50,
-      ai_max_kb_docs: 3,
-      ai_max_rag_chunks: 500,
-      ai_allowed_models: ['GPT-4o-mini'],
-      max_marketplace_accounts: 1,
-      max_tenant_users: 2,
-      max_products: 200,
-      max_monthly_orders: 500
-    },
-    features: {
-      allow_ai_auto_reply: true,
-      allow_rag_knowledge: true,
-      allow_post_purchase_care: false,
-      allow_multi_channel_sync: false,
-      allow_analytics_alerts: false,
-      allow_priority_support: false,
-      custom_ai_prompt: false
-    }
-  },
-  {
-    id: 'p-005',
-    plan_code: 'CUSTOM_AGENCY_V1',
-    plan_name: 'Gói Agency Quản Lý Chuỗi Gian Hàng',
-    billing_period: 'CUSTOM',
-    price_amount: 6500000,
-    currency: 'VND',
-    status: 'INACTIVE',
-    active_tenants_count: 5,
-    created_at: '2026-03-10T08:00:00.000Z',
-    updated_at: '2026-07-15T11:45:00.000Z',
-    is_popular: false,
-    limits: {
-      ai_monthly_tokens: 50000000,
-      ai_daily_runs: 20000,
-      ai_max_kb_docs: 500,
-      ai_max_rag_chunks: 100000,
-      ai_allowed_models: ['GPT-4o', 'Claude-3.5-Sonnet'],
-      max_marketplace_accounts: 50,
-      max_tenant_users: 100,
-      max_products: 200000,
-      max_monthly_orders: 500000
-    },
-    features: {
-      allow_ai_auto_reply: true,
-      allow_rag_knowledge: true,
-      allow_post_purchase_care: true,
-      allow_multi_channel_sync: true,
-      allow_analytics_alerts: true,
-      allow_priority_support: true,
-      custom_ai_prompt: true
-    }
-  }
-]
+
+// INITIAL_PLANS removed to use API data
 
 export default function PlansScreen() {
-  const [plans, setPlans] = useState<SubscriptionPlan[]>(INITIAL_PLANS)
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([])
+  const [loading, setLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    getPlans({ page: 0, size: 200 })
+      .then(response => {
+        if (active) {
+          setPlans(response.items)
+        }
+      })
+      .catch(error => {
+        console.error(error)
+        Swal.fire({
+          icon: 'error',
+          title: 'Lỗi tải dữ liệu',
+          text: getApiErrorMessage(error)
+        })
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
+
   const [searchTerm, setSearchTerm] = useState('')
   const [periodFilter, setPeriodFilter] = useState<string>('ALL')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
@@ -255,90 +124,89 @@ export default function PlansScreen() {
     setIsAIQuotaModalOpen(true)
   }
 
-  const handleSavePlan = (planData: Partial<SubscriptionPlan>) => {
-    if (editingPlan) {
-      // Update existing
-      setPlans(prev =>
-        prev.map(p =>
-          p.id === editingPlan.id
-            ? {
-                ...p,
-                ...planData,
-                updated_at: new Date().toISOString()
-              } as SubscriptionPlan
-            : p
-        )
-      )
+  const handleSavePlan = async (planData: Partial<SubscriptionPlan>) => {
+    try {
+      if (editingPlan) {
+        // Update existing
+        await updatePlan(editingPlan.id, planData)
+        Swal.fire({
+          icon: 'success',
+          title: 'Cập nhật thành công',
+          text: `Đã lưu thông tin gói cước ${planData.plan_name}`,
+          timer: 1800,
+          showConfirmButton: false
+        })
+      } else {
+        // Create new
+        const created = await createPlan(planData)
+        Swal.fire({
+          icon: 'success',
+          title: 'Tạo gói thành công',
+          text: `Gói ${created.plan_name} đã sẵn sàng cấp phát cho Tenant!`,
+          timer: 2000,
+          showConfirmButton: false
+        })
+      }
+      setReloadKey(prev => prev + 1)
+      setIsFormModalOpen(false)
+    } catch (error) {
+      console.error(error)
+      Swal.fire({
+        icon: 'error',
+        title: 'Thao tác thất bại',
+        text: getApiErrorMessage(error)
+      })
+    }
+  }
+
+  const handleSaveAIQuota = async (planId: string, updatedLimits: PlanLimits) => {
+    try {
+      const existingPlan = plans.find(p => p.id === planId)
+      if (!existingPlan) return
+      await updatePlan(planId, {
+        ...existingPlan,
+        limits: updatedLimits
+      })
+      setIsAIQuotaModalOpen(false)
+      setReloadKey(prev => prev + 1)
       Swal.fire({
         icon: 'success',
-        title: 'Cập nhật thành công',
-        text: `Đã lưu thông tin gói cước ${planData.plan_name}`,
+        title: 'Đã cập nhật Quota AI',
+        text: 'Mức giới hạn Token & Daily Runs mới đã được áp dụng.',
         timer: 1800,
         showConfirmButton: false
       })
-    } else {
-      // Create new
-      const newPlan: SubscriptionPlan = {
-        id: `p-${Date.now()}`,
-        plan_code: planData.plan_code || `PLAN_${Date.now().toString().slice(-4)}`,
-        plan_name: planData.plan_name || 'Gói Cước Mới',
-        billing_period: planData.billing_period || 'MONTHLY',
-        price_amount: planData.price_amount || 0,
-        currency: 'VND',
-        status: planData.status || 'ACTIVE',
-        active_tenants_count: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        limits: planData.limits!,
-        features: planData.features!
-      }
-      setPlans(prev => [newPlan, ...prev])
+    } catch (error) {
+      console.error(error)
       Swal.fire({
-        icon: 'success',
-        title: 'Tạo gói thành công',
-        text: `Gói ${newPlan.plan_name} đã sẵn sàng cấp phát cho Tenant!`,
-        timer: 2000,
-        showConfirmButton: false
+        icon: 'error',
+        title: 'Cập nhật thất bại',
+        text: getApiErrorMessage(error)
       })
     }
-    setIsFormModalOpen(false)
   }
 
-  const handleSaveAIQuota = (planId: string, updatedLimits: PlanLimits) => {
-    setPlans(prev =>
-      prev.map(p =>
-        p.id === planId
-          ? {
-              ...p,
-              limits: updatedLimits,
-              updated_at: new Date().toISOString()
-            }
-          : p
-      )
-    )
-    setIsAIQuotaModalOpen(false)
-    Swal.fire({
-      icon: 'success',
-      title: 'Đã cập nhật Quota AI',
-      text: 'Mức giới hạn Token & Daily Runs mới đã được áp dụng.',
-      timer: 1800,
-      showConfirmButton: false
-    })
-  }
-
-  const togglePlanStatus = (plan: SubscriptionPlan) => {
+  const togglePlanStatus = async (plan: SubscriptionPlan) => {
     const nextStatus: PlanStatus = plan.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-    setPlans(prev =>
-      prev.map(p => (p.id === plan.id ? { ...p, status: nextStatus, updated_at: new Date().toISOString() } : p))
-    )
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'info',
-      title: `Trạng thái: ${nextStatus}`,
-      showConfirmButton: false,
-      timer: 1500
-    })
+    try {
+      await updatePlanStatus(plan.id, nextStatus)
+      setReloadKey(prev => prev + 1)
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: `Trạng thái: ${nextStatus}`,
+        showConfirmButton: false,
+        timer: 1500
+      })
+    } catch (error) {
+      console.error(error)
+      Swal.fire({
+        icon: 'error',
+        title: 'Thay đổi trạng thái thất bại',
+        text: getApiErrorMessage(error)
+      })
+    }
   }
 
   const handleDeletePlan = (plan: SubscriptionPlan) => {
@@ -361,16 +229,26 @@ export default function PlansScreen() {
       cancelButtonColor: '#64748b',
       confirmButtonText: 'Xóa Gói',
       cancelButtonText: 'Hủy'
-    }).then(result => {
+    }).then(async result => {
       if (result.isConfirmed) {
-        setPlans(prev => prev.filter(p => p.id !== plan.id))
-        Swal.fire({
-          icon: 'success',
-          title: 'Đã xóa',
-          text: 'Gói cước đã được loại bỏ thành công.',
-          timer: 1500,
-          showConfirmButton: false
-        })
+        try {
+          await updatePlanStatus(plan.id, 'ARCHIVED')
+          setReloadKey(prev => prev + 1)
+          Swal.fire({
+            icon: 'success',
+            title: 'Đã xóa (Lưu trữ)',
+            text: 'Gói cước đã được chuyển sang trạng thái lưu trữ (ARCHIVED) thành công.',
+            timer: 1500,
+            showConfirmButton: false
+          })
+        } catch (error) {
+          console.error(error)
+          Swal.fire({
+            icon: 'error',
+            title: 'Xóa gói thất bại',
+            text: getApiErrorMessage(error)
+          })
+        }
       }
     })
   }
@@ -414,28 +292,40 @@ export default function PlansScreen() {
   return (
     <div className="plans-container">
       {/* 1. Header & Page Title */}
-      <div className="plans-header">
-        <div className="plans-title-group">
-          <div className="plans-title-row">
-            <h1 className="plans-title">Quản Lý Gói Cước & Tài Nguyên AI</h1>
-            <span className="plans-status-badge">
-              <CrownOutlined /> Super Admin Portal
-            </span>
+      <header className="tenant-topbar">
+        <div className="tenant-title">
+          <div>
+            <p className="tenant-eyebrow">Quản trị hệ thống</p>
+            <h1>Gói cước dịch vụ</h1>
           </div>
-          <p className="plans-subtitle">
-            Cấu hình danh mục gói dịch vụ thuê bao, hạn mức Gian hàng, User & Phân bổ Quota Tokens AI cho Tenant
-          </p>
+          <span className="tenant-count-pill">{totalPlans} gói cước</span>
         </div>
 
-        <div className="plans-actions">
-          <button className="btn-export" onClick={handleExportExcel} type="button">
-            <ExportOutlined /> Xuất Excel
+        <div className="tenant-top-actions">
+          <button
+            aria-label="Tải lại danh sách"
+            className="tenant-ghost-button"
+            onClick={() => setReloadKey(current => current + 1)}
+            type="button"
+          >
+            <ReloadOutlined />
+            Làm mới
           </button>
-          <button className="btn-create-plan" onClick={handleOpenCreateModal} type="button">
-            <PlusOutlined /> + Tạo Gói Cước Mới
+          <button
+            aria-label="Xuất file Excel"
+            className="tenant-ghost-button"
+            onClick={handleExportExcel}
+            type="button"
+          >
+            <ExportOutlined />
+            Xuất Excel
+          </button>
+          <button className="tenant-primary-button" onClick={handleOpenCreateModal} type="button">
+            <PlusOutlined />
+            Tạo gói cước mới
           </button>
         </div>
-      </div>
+      </header>
 
       {/* 2. KPI Summary Cards Grid */}
       <div className="kpi-grid">
@@ -572,7 +462,14 @@ export default function PlansScreen() {
             </tr>
           </thead>
           <tbody>
-            {filteredPlans.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <div className="tenant-loading-spinner" style={{ margin: '0 auto' }} />
+                  <strong style={{ display: 'block', marginTop: '12px', color: '#64748b' }}>Đang tải danh sách gói cước...</strong>
+                </td>
+              </tr>
+            ) : filteredPlans.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                   Không tìm thấy gói cước nào phù hợp với bộ lọc.

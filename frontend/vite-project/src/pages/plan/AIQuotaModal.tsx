@@ -3,8 +3,7 @@ import {
   CloseOutlined,
   ThunderboltOutlined,
   RobotOutlined,
-  CheckCircleOutlined,
-  FireOutlined
+  CheckCircleOutlined
 } from '@ant-design/icons'
 import type { SubscriptionPlan, PlanLimits } from './plan.types'
 
