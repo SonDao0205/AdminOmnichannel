@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import axios from 'axios'
 import {
   PlusOutlined,
   SearchOutlined,
@@ -151,6 +152,9 @@ export default function PlansScreen() {
       setIsFormModalOpen(false)
     } catch (error) {
       console.error(error)
+      if (axios.isAxiosError(error) && error.response?.status === 400) {
+        throw error
+      }
       Swal.fire({
         icon: 'error',
         title: 'Thao tác thất bại',
@@ -290,7 +294,7 @@ export default function PlansScreen() {
   }
 
   return (
-    <div className="plans-container">
+    <div className="tenant-page">
       {/* 1. Header & Page Title */}
       <header className="tenant-topbar">
         <div className="tenant-title">
@@ -327,304 +331,308 @@ export default function PlansScreen() {
         </div>
       </header>
 
-      {/* 2. KPI Summary Cards Grid */}
-      <div className="kpi-grid">
-        {/* KPI 1 */}
-        <div className="kpi-card red">
-          <div className="kpi-card-content">
-            <div className="kpi-tag-row">
-              <span className="kpi-title">Gói Bán Chạy Nhất</span>
-              <span className="kpi-badge">42 Tenants</span>
+      <section className="tenant-content">
+        <div className="plans-container" style={{ marginTop: '24px' }}>
+          {/* 2. KPI Summary Cards Grid */}
+          <div className="kpi-grid">
+            {/* KPI 1 */}
+            <div className="kpi-card red">
+              <div className="kpi-card-content">
+                <div className="kpi-tag-row">
+                  <span className="kpi-title">Gói Bán Chạy Nhất</span>
+                  <span className="kpi-badge">42 Tenants</span>
+                </div>
+                <div className="kpi-value">PRO_OMNI_AI</div>
+                <div className="kpi-subtext">
+                  <span className="kpi-trend positive">↑ 3.5M Tokens</span> / tenant / tháng
+                </div>
+              </div>
+              <div className="kpi-icon-wrapper">
+                <CrownOutlined />
+              </div>
             </div>
-            <div className="kpi-value">PRO_OMNI_AI</div>
-            <div className="kpi-subtext">
-              <span className="kpi-trend positive">↑ 3.5M Tokens</span> / tenant / tháng
+
+            {/* KPI 2 */}
+            <div className="kpi-card orange">
+              <div className="kpi-card-content">
+                <div className="kpi-tag-row">
+                  <span className="kpi-title">Quota AI Đã Cấp Phát</span>
+                  <span className="kpi-badge">82% Capacity</span>
+                </div>
+                <div className="kpi-value">{(totalMonthlyTokensGranted / 1000000).toFixed(1)}M Tokens</div>
+                <div className="kpi-subtext">
+                  <span className="kpi-trend neutral">⚡ {plans.reduce((acc, p) => acc + p.limits.ai_daily_runs, 0)}</span> Runs/ngày
+                </div>
+              </div>
+              <div className="kpi-icon-wrapper">
+                <ThunderboltOutlined />
+              </div>
+            </div>
+
+            {/* KPI 3 */}
+            <div className="kpi-card purple">
+              <div className="kpi-card-content">
+                <div className="kpi-tag-row">
+                  <span className="kpi-title">Gói Cước Đang Mở</span>
+                  <span className="kpi-badge">Active Plans</span>
+                </div>
+                <div className="kpi-value">0{activePlansCount} / 0{totalPlans} Gói</div>
+                <div className="kpi-subtext">
+                  <span className="kpi-trend positive">+1 gói mới</span> cập nhật tuần này
+                </div>
+              </div>
+              <div className="kpi-icon-wrapper">
+                <DatabaseOutlined />
+              </div>
+            </div>
+
+            {/* KPI 4 */}
+            <div className="kpi-card blue">
+              <div className="kpi-card-content">
+                <div className="kpi-tag-row">
+                  <span className="kpi-title">Doanh Thu Uớc Tính (MRR)</span>
+                  <span className="kpi-badge">Monthly Run Rate</span>
+                </div>
+                <div className="kpi-value">{(estimatedMRR / 1000000).toFixed(1)}M đ</div>
+                <div className="kpi-subtext">Tính từ các Tenant đăng ký active</div>
+              </div>
+              <div className="kpi-icon-wrapper">
+                <BarChartOutlined />
+              </div>
             </div>
           </div>
-          <div className="kpi-icon-wrapper">
-            <CrownOutlined />
-          </div>
-        </div>
 
-        {/* KPI 2 */}
-        <div className="kpi-card orange">
-          <div className="kpi-card-content">
-            <div className="kpi-tag-row">
-              <span className="kpi-title">Quota AI Đã Cấp Phát</span>
-              <span className="kpi-badge">82% Capacity</span>
+          {/* 3. Filter Bar (Search + Filters + Sort) */}
+          <div className="plans-controls-bar">
+            <div className="plans-filter-group">
+              {/* Search Box */}
+              <div className="search-box">
+                <SearchOutlined className="search-icon" />
+                <input
+                  className="search-input"
+                  type="text"
+                  placeholder="Tìm kiếm tên gói, mã plan_code, Quota AI..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {/* Billing Period Filter */}
+              <select
+                className="filter-select"
+                value={periodFilter}
+                onChange={e => setPeriodFilter(e.target.value)}
+              >
+                <option value="ALL">Tất cả chu kỳ thanh toán</option>
+                <option value="MONTHLY">Hằng Tháng (Monthly)</option>
+                <option value="YEARLY">Hằng Năm (Yearly)</option>
+                <option value="CUSTOM">Tùy chỉnh (Custom)</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                className="filter-select"
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+              >
+                <option value="ALL">Trạng thái: Tất cả</option>
+                <option value="ACTIVE">HOẠT ĐỘNG (Active)</option>
+                <option value="INACTIVE">TẠM DỪNG (Inactive)</option>
+                <option value="ARCHIVED">LƯU TRỮ (Archived)</option>
+              </select>
             </div>
-            <div className="kpi-value">{(totalMonthlyTokensGranted / 1000000).toFixed(1)}M Tokens</div>
-            <div className="kpi-subtext">
-              <span className="kpi-trend neutral">⚡ {plans.reduce((acc, p) => acc + p.limits.ai_daily_runs, 0)}</span> Runs/ngày
+
+            {/* Sort Group */}
+            <div className="plans-sort-group">
+              <span>Sắp xếp:</span>
+              <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="updated">Mới cập nhật</option>
+                <option value="price_desc">Giá giảm dần</option>
+                <option value="price_asc">Giá tăng dần</option>
+                <option value="tokens_desc">Quota Tokens AI nhiều nhất</option>
+              </select>
             </div>
           </div>
-          <div className="kpi-icon-wrapper">
-            <ThunderboltOutlined />
-          </div>
-        </div>
 
-        {/* KPI 3 */}
-        <div className="kpi-card purple">
-          <div className="kpi-card-content">
-            <div className="kpi-tag-row">
-              <span className="kpi-title">Gói Cước Đang Mở</span>
-              <span className="kpi-badge">Active Plans</span>
-            </div>
-            <div className="kpi-value">0{activePlansCount} / 0{totalPlans} Gói</div>
-            <div className="kpi-subtext">
-              <span className="kpi-trend positive">+1 gói mới</span> cập nhật tuần này
-            </div>
-          </div>
-          <div className="kpi-icon-wrapper">
-            <DatabaseOutlined />
-          </div>
-        </div>
-
-        {/* KPI 4 */}
-        <div className="kpi-card blue">
-          <div className="kpi-card-content">
-            <div className="kpi-tag-row">
-              <span className="kpi-title">Doanh Thu Uớc Tính (MRR)</span>
-              <span className="kpi-badge">Monthly Run Rate</span>
-            </div>
-            <div className="kpi-value">{(estimatedMRR / 1000000).toFixed(1)}M đ</div>
-            <div className="kpi-subtext">Tính từ các Tenant đăng ký active</div>
-          </div>
-          <div className="kpi-icon-wrapper">
-            <BarChartOutlined />
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Filter Bar (Search + Filters + Sort) */}
-      <div className="plans-controls-bar">
-        <div className="plans-filter-group">
-          {/* Search Box */}
-          <div className="search-box">
-            <SearchOutlined className="search-icon" />
-            <input
-              className="search-input"
-              type="text"
-              placeholder="Tìm kiếm tên gói, mã plan_code, Quota AI..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {/* Billing Period Filter */}
-          <select
-            className="filter-select"
-            value={periodFilter}
-            onChange={e => setPeriodFilter(e.target.value)}
-          >
-            <option value="ALL">Tất cả chu kỳ thanh toán</option>
-            <option value="MONTHLY">Hằng Tháng (Monthly)</option>
-            <option value="YEARLY">Hằng Năm (Yearly)</option>
-            <option value="CUSTOM">Tùy chỉnh (Custom)</option>
-          </select>
-
-          {/* Status Filter */}
-          <select
-            className="filter-select"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="ALL">Trạng thái: Tất cả</option>
-            <option value="ACTIVE">HOẠT ĐỘNG (Active)</option>
-            <option value="INACTIVE">TẠM DỪNG (Inactive)</option>
-            <option value="ARCHIVED">LƯU TRỮ (Archived)</option>
-          </select>
-        </div>
-
-        {/* Sort Group */}
-        <div className="plans-sort-group">
-          <span>Sắp xếp:</span>
-          <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="updated">Mới cập nhật</option>
-            <option value="price_desc">Giá giảm dần</option>
-            <option value="price_asc">Giá tăng dần</option>
-            <option value="tokens_desc">Quota Tokens AI nhiều nhất</option>
-          </select>
-        </div>
-      </div>
-
-      {/* 4. Main Data Table */}
-      <div className="table-container">
-        <table className="custom-table">
-          <thead>
-            <tr>
-              <th>Thông Tin Gói Cước</th>
-              <th>Chu Kỳ & Giá Thuê</th>
-              <th>Giới Hạn Tài Nguyên AI (Tokens/Quota)</th>
-              <th>Giới Hạn Vận Hành POS</th>
-              <th>Trạng Thái</th>
-              <th>Hành Động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                  <div className="tenant-loading-spinner" style={{ margin: '0 auto' }} />
-                  <strong style={{ display: 'block', marginTop: '12px', color: '#64748b' }}>Đang tải danh sách gói cước...</strong>
-                </td>
-              </tr>
-            ) : filteredPlans.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                  Không tìm thấy gói cước nào phù hợp với bộ lọc.
-                </td>
-              </tr>
-            ) : (
-              filteredPlans.map(plan => (
-                <tr key={plan.id}>
-                  {/* Col 1: Plan Info */}
-                  <td>
-                    <div className="plan-info-cell">
-                      <div className={`plan-icon-badge ${plan.plan_code.includes('ENTERPRISE') ? 'enterprise' : plan.plan_code.includes('STARTER') ? 'starter' : ''}`}>
-                        {plan.is_popular ? <CrownOutlined style={{ color: '#d97706' }} /> : <ShopOutlined />}
-                      </div>
-                      <div className="plan-info-text">
-                        <div className="plan-name-title">
-                          {plan.plan_name}
-                          {plan.is_popular && <span className="badge-featured">BÁN CHẠY</span>}
-                        </div>
-                        <span className="plan-code-subtitle">{plan.plan_code}</span>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Col 2: Price & Billing */}
-                  <td>
-                    <div className="price-display">
-                      <span className="price-main">{formatPrice(plan.price_amount, plan.billing_period)}</span>
-                      <span className="price-sub">{plan.active_tenants_count} Tenants đang dùng</span>
-                    </div>
-                  </td>
-
-                  {/* Col 3: AI Resources & Quota */}
-                  <td>
-                    <div className="ai-quota-cell">
-                      <div className="token-highlight">
-                        <ThunderboltOutlined />
-                        <span>{formatTokenDisplay(plan.limits.ai_monthly_tokens)} / tháng</span>
-                      </div>
-                      <div className="ai-details-row">
-                        <span className="ai-pill">⚡ {plan.limits.ai_daily_runs} runs/ngày</span>
-                        <span className="ai-pill">📚 {plan.limits.ai_max_kb_docs} KB Docs</span>
-                      </div>
-                      <div className="ai-details-row">
-                        {(plan.limits.ai_allowed_models || []).map(m => (
-                          <span key={m} className="model-tag">
-                            {m.replace('-Sonnet', '').replace('-mini', 'm')}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Col 4: Operational Limits */}
-                  <td>
-                    <div className="limits-cell">
-                      <div className="limits-item">
-                        <ShopOutlined style={{ color: '#2563eb' }} />
-                        <span>Max <strong>{plan.limits.max_marketplace_accounts} Gian hàng</strong> sàn</span>
-                      </div>
-                      <div className="limits-item">
-                        <TeamOutlined style={{ color: '#16a34a' }} />
-                        <span>Max <strong>{plan.limits.max_tenant_users} Nhân viên</strong></span>
-                      </div>
-                      <div className="limits-item">
-                        <DatabaseOutlined style={{ color: '#d97706' }} />
-                        <span>Max <strong>{plan.limits.max_products.toLocaleString()} SKUs</strong></span>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Col 5: Status */}
-                  <td>
-                    <span className={`status-pill ${plan.status.toLowerCase()}`}>
-                      {plan.status === 'ACTIVE' && <CheckCircleOutlined />}
-                      {plan.status === 'INACTIVE' && <StopOutlined />}
-                      {plan.status}
-                    </span>
-                  </td>
-
-                  {/* Col 6: Action Buttons */}
-                  <td>
-                    <div className="action-buttons-group">
-                      {/* Edit full plan */}
-                      <button
-                        className="btn-table-action"
-                        title="Chỉnh sửa thông tin gói cước"
-                        onClick={() => handleOpenEditModal(plan)}
-                        type="button"
-                      >
-                        <EditOutlined />
-                      </button>
-
-                      {/* Quick AI Quota adjust */}
-                      <button
-                        className="btn-table-action ai-quota-btn"
-                        title="Chỉnh sửa Quota AI (Tokens / Daily Runs)"
-                        onClick={() => handleOpenAIQuotaModal(plan)}
-                        type="button"
-                      >
-                        <ThunderboltOutlined />
-                      </button>
-
-                      {/* Toggle status */}
-                      <button
-                        className="btn-table-action"
-                        title="Đổi trạng thái Hoạt động / Tạm dừng"
-                        onClick={() => togglePlanStatus(plan)}
-                        type="button"
-                      >
-                        <SwapOutlined />
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        className="btn-table-action delete-btn"
-                        title="Xóa gói cước"
-                        onClick={() => handleDeletePlan(plan)}
-                        type="button"
-                      >
-                        <DeleteOutlined />
-                      </button>
-                    </div>
-                  </td>
+          {/* 4. Main Data Table */}
+          <div className="table-container">
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Thông Tin Gói Cước</th>
+                  <th>Chu Kỳ & Giá Thuê</th>
+                  <th>Giới Hạn Tài Nguyên AI (Tokens/Quota)</th>
+                  <th>Giới Hạn Vận Hành POS</th>
+                  <th>Trạng Thái</th>
+                  <th>Hành Động</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                      <div className="tenant-loading-spinner" style={{ margin: '0 auto' }} />
+                      <strong style={{ display: 'block', marginTop: '12px', color: '#64748b' }}>Đang tải danh sách gói cước...</strong>
+                    </td>
+                  </tr>
+                ) : filteredPlans.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                      Không tìm thấy gói cước nào phù hợp với bộ lọc.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPlans.map(plan => (
+                    <tr key={plan.id}>
+                      {/* Col 1: Plan Info */}
+                      <td>
+                        <div className="plan-info-cell">
+                          <div className={`plan-icon-badge ${plan.plan_code.includes('ENTERPRISE') ? 'enterprise' : plan.plan_code.includes('STARTER') ? 'starter' : ''}`}>
+                            {plan.is_popular ? <CrownOutlined style={{ color: '#d97706' }} /> : <ShopOutlined />}
+                          </div>
+                          <div className="plan-info-text">
+                            <div className="plan-name-title">
+                              {plan.plan_name}
+                              {plan.is_popular && <span className="badge-featured">BÁN CHẠY</span>}
+                            </div>
+                            <span className="plan-code-subtitle">{plan.plan_code}</span>
+                          </div>
+                        </div>
+                      </td>
 
-        {/* Table Footer / Pagination */}
-        <div className="table-footer">
-          <span>Hiển thị 1 - {filteredPlans.length} trong số {filteredPlans.length} gói cước</span>
-          <div className="pagination-controls">
-            <button className="btn-page" disabled type="button">&lt;</button>
-            <button className="btn-page active" type="button">1</button>
-            <button className="btn-page" disabled type="button">&gt;</button>
+                      {/* Col 2: Price & Billing */}
+                      <td>
+                        <div className="price-display">
+                          <span className="price-main">{formatPrice(plan.price_amount, plan.billing_period)}</span>
+                          <span className="price-sub">{plan.active_tenants_count} Tenants đang dùng</span>
+                        </div>
+                      </td>
+
+                      {/* Col 3: AI Resources & Quota */}
+                      <td>
+                        <div className="ai-quota-cell">
+                          <div className="token-highlight">
+                            <ThunderboltOutlined />
+                            <span>{formatTokenDisplay(plan.limits.ai_monthly_tokens)} / tháng</span>
+                          </div>
+                          <div className="ai-details-row">
+                            <span className="ai-pill">⚡ {plan.limits.ai_daily_runs} runs/ngày</span>
+                            <span className="ai-pill">📚 {plan.limits.ai_max_kb_docs} KB Docs</span>
+                          </div>
+                          <div className="ai-details-row">
+                            {(plan.limits.ai_allowed_models || []).map(m => (
+                              <span key={m} className="model-tag">
+                                {m.replace('-Sonnet', '').replace('-mini', 'm')}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Col 4: Operational Limits */}
+                      <td>
+                        <div className="limits-cell">
+                          <div className="limits-item">
+                            <ShopOutlined style={{ color: '#2563eb' }} />
+                            <span>Max <strong>{plan.limits.max_marketplace_accounts} Gian hàng</strong> sàn</span>
+                          </div>
+                          <div className="limits-item">
+                            <TeamOutlined style={{ color: '#16a34a' }} />
+                            <span>Max <strong>{plan.limits.max_tenant_users} Nhân viên</strong></span>
+                          </div>
+                          <div className="limits-item">
+                            <DatabaseOutlined style={{ color: '#d97706' }} />
+                            <span>Max <strong>{plan.limits.max_products.toLocaleString()} SKUs</strong></span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Col 5: Status */}
+                      <td>
+                        <span className={`status-pill ${plan.status.toLowerCase()}`}>
+                          {plan.status === 'ACTIVE' && <CheckCircleOutlined />}
+                          {plan.status === 'INACTIVE' && <StopOutlined />}
+                          {plan.status}
+                        </span>
+                      </td>
+
+                      {/* Col 6: Action Buttons */}
+                      <td>
+                        <div className="action-buttons-group">
+                          {/* Edit full plan */}
+                          <button
+                            className="btn-table-action"
+                            title="Chỉnh sửa thông tin gói cước"
+                            onClick={() => handleOpenEditModal(plan)}
+                            type="button"
+                          >
+                            <EditOutlined />
+                          </button>
+
+                          {/* Quick AI Quota adjust */}
+                          <button
+                            className="btn-table-action ai-quota-btn"
+                            title="Chỉnh sửa Quota AI (Tokens / Daily Runs)"
+                            onClick={() => handleOpenAIQuotaModal(plan)}
+                            type="button"
+                          >
+                            <ThunderboltOutlined />
+                          </button>
+
+                          {/* Toggle status */}
+                          <button
+                            className="btn-table-action"
+                            title="Đổi trạng thái Hoạt động / Tạm dừng"
+                            onClick={() => togglePlanStatus(plan)}
+                            type="button"
+                          >
+                            <SwapOutlined />
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            className="btn-table-action delete-btn"
+                            title="Xóa gói cước"
+                            onClick={() => handleDeletePlan(plan)}
+                            type="button"
+                          >
+                            <DeleteOutlined />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
+            {/* Table Footer / Pagination */}
+            <div className="table-footer">
+              <span>Hiển thị 1 - {filteredPlans.length} trong số {filteredPlans.length} gói cước</span>
+              <div className="pagination-controls">
+                <button className="btn-page" disabled type="button">&lt;</button>
+                <button className="btn-page active" type="button">1</button>
+                <button className="btn-page" disabled type="button">&gt;</button>
+              </div>
+            </div>
           </div>
+
+          {/* 5. Modals */}
+          <PlanFormModal
+            isOpen={isFormModalOpen}
+            editingPlan={editingPlan}
+            onClose={() => setIsFormModalOpen(false)}
+            onSave={handleSavePlan}
+          />
+
+          <AIQuotaModal
+            isOpen={isAIQuotaModalOpen}
+            plan={selectedPlanForQuota}
+            onClose={() => setIsAIQuotaModalOpen(false)}
+            onSaveQuota={handleSaveAIQuota}
+          />
         </div>
-      </div>
-
-      {/* 5. Modals */}
-      <PlanFormModal
-        isOpen={isFormModalOpen}
-        editingPlan={editingPlan}
-        onClose={() => setIsFormModalOpen(false)}
-        onSave={handleSavePlan}
-      />
-
-      <AIQuotaModal
-        isOpen={isAIQuotaModalOpen}
-        plan={selectedPlanForQuota}
-        onClose={() => setIsAIQuotaModalOpen(false)}
-        onSaveQuota={handleSaveAIQuota}
-      />
+      </section>
     </div>
   )
 }
