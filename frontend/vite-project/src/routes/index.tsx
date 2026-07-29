@@ -4,6 +4,7 @@ import LoginScreen from '../pages/auth/LoginScreen'
 import { ROUTES } from './paths'
 import PlansScreen from '../pages/plan/PlansScreen'
 import AccountsScreen from '../pages/accounts/AccountsScreen'
+import ProtectedRoute from '../components/auth/ProtectedRoute'
 
 export const router = createBrowserRouter([
   {
@@ -12,7 +13,11 @@ export const router = createBrowserRouter([
   },
   {
     path: '/',
-    element: <AppLayout />,
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,
