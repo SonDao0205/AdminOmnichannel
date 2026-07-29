@@ -104,7 +104,7 @@ public class SecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource(AdminSecurityProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.getAllowedOrigins());
+        configuration.setAllowedOriginPatterns(properties.getAllowedOriginPatterns());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "X-Request-Id"));
         configuration.setExposedHeaders(List.of("X-Request-Id"));

@@ -20,7 +20,8 @@ public class AdminSecurityProperties {
     private Duration lockDuration = Duration.ofMinutes(15);
     private int loginRateLimit = 20;
     private Duration loginRateWindow = Duration.ofMinutes(5);
-    private List<String> allowedOrigins = new ArrayList<>(List.of("http://localhost:5173"));
+    private List<String> allowedOriginPatterns = new ArrayList<>(
+            List.of("http://localhost:*", "http://127.0.0.1:*"));
 
     public Duration getSessionTtl() {
         return sessionTtl;
@@ -86,12 +87,12 @@ public class AdminSecurityProperties {
         this.loginRateWindow = loginRateWindow;
     }
 
-    public List<String> getAllowedOrigins() {
-        return allowedOrigins;
+    public List<String> getAllowedOriginPatterns() {
+        return allowedOriginPatterns;
     }
 
-    public void setAllowedOrigins(List<String> allowedOrigins) {
-        this.allowedOrigins = allowedOrigins;
+    public void setAllowedOriginPatterns(List<String> allowedOriginPatterns) {
+        this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
     @PostConstruct
@@ -117,15 +118,24 @@ public class AdminSecurityProperties {
         if ("None".equals(cookieSameSite) && !cookieSecure) {
             throw new IllegalStateException("SameSite=None requires a Secure admin cookie");
         }
-        if (allowedOrigins == null || allowedOrigins.isEmpty() || allowedOrigins.contains("*")) {
-            throw new IllegalStateException("Admin CORS origins must be explicit");
+        if (allowedOriginPatterns == null
+                || allowedOriginPatterns.isEmpty()
+                || allowedOriginPatterns.contains("*")) {
+            throw new IllegalStateException("Admin CORS origin patterns must be restricted");
         }
-        for (String origin : allowedOrigins) {
+        for (String origin : allowedOriginPatterns) {
+            if (origin.matches("^https?://(localhost|127\\.0\\.0\\.1):\\*$")) {
+                continue;
+            }
+            if (origin.contains("*")) {
+                throw new IllegalStateException(
+                        "Wildcard ports are only allowed for localhost: " + origin);
+            }
             URI uri = URI.create(origin);
             if (uri.getHost() == null
                     || (!"http".equalsIgnoreCase(uri.getScheme())
                     && !"https".equalsIgnoreCase(uri.getScheme()))) {
-                throw new IllegalStateException("Invalid admin CORS origin: " + origin);
+                throw new IllegalStateException("Invalid admin CORS origin pattern: " + origin);
             }
         }
     }
