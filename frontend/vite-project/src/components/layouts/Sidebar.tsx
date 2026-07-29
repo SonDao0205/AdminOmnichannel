@@ -8,6 +8,8 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
+import { getApiErrorMessage } from '../../apis/adminApi'
+import { useAuth } from '../../contexts/auth'
 import { ROUTES } from '../../routes/paths'
 
 type NavigationItem = {
@@ -18,12 +20,12 @@ type NavigationItem = {
 
 const navigationItems: NavigationItem[] = [
   {
-    label: 'Tài khoản',
+    label: 'Tài khoản tenant',
     to: ROUTES.account,
     icon: <TeamOutlined />,
   },
   {
-    label: 'Gói cước',
+    label: 'Gói dịch vụ',
     to: ROUTES.plan,
     icon: <ShoppingCartOutlined />,
   },
@@ -31,7 +33,9 @@ const navigationItems: NavigationItem[] = [
 
 export default function Sidebar() {
   const navigate = useNavigate()
+  const { admin, logout } = useAuth()
   const [showDropdown, setShowDropdown] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -46,26 +50,46 @@ export default function Sidebar() {
     }
   }, [])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowDropdown(false)
-    Swal.fire({
+    const result = await Swal.fire({
       title: 'Xác nhận đăng xuất',
       text: 'Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#ff5252',
-      cancelButtonColor: '#73829a',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#667085',
       confirmButtonText: 'Đăng xuất',
       cancelButtonText: 'Hủy',
-      background: '#10192b',
-      color: '#fff',
-      iconColor: '#ff5252',
-    }).then((result) => {
-      if (result.isConfirmed) {
-        navigate(ROUTES.login)
-      }
+      background: '#fff',
+      color: '#101828',
+      iconColor: '#dc2626',
     })
+
+    if (!result.isConfirmed) return
+
+    setLoggingOut(true)
+    try {
+      await logout()
+      navigate(ROUTES.login, { replace: true })
+    } catch (error) {
+      await Swal.fire({
+        title: 'Chưa thể đăng xuất',
+        text: getApiErrorMessage(error),
+        icon: 'error',
+        confirmButtonColor: '#2563eb',
+      })
+    } finally {
+      setLoggingOut(false)
+    }
   }
+
+  const initials = admin?.displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || 'AD'
 
   return (
     <aside className="app-sidebar">
@@ -103,11 +127,12 @@ export default function Sidebar() {
           <div className="app-profile-dropdown">
             <button
               className="app-profile-dropdown-item logout"
+              disabled={loggingOut}
               onClick={handleLogout}
               type="button"
             >
               <LogoutOutlined />
-              <span>Đăng xuất</span>
+              <span>{loggingOut ? 'Đang đăng xuất...' : 'Đăng xuất'}</span>
             </button>
           </div>
         )}
@@ -116,10 +141,10 @@ export default function Sidebar() {
           onClick={() => setShowDropdown(!showDropdown)}
           type="button"
         >
-          <span className="app-profile-avatar">AV</span>
+          <span className="app-profile-avatar">{initials}</span>
           <span className="app-profile-copy">
-            <strong>Admin Mode</strong>
-            <small>OmnichannelPOS</small>
+            <strong>{admin?.displayName ?? 'Quản trị viên'}</strong>
+            <small>{admin?.email ?? 'OmnichannelPOS'}</small>
           </span>
           <DownOutlined className={`app-profile-arrow ${showDropdown ? 'rotate-180' : ''}`} />
         </button>

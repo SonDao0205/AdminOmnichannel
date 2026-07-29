@@ -1,0 +1,124 @@
+CREATE TABLE IF NOT EXISTS platform_admins (
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    password_algorithm VARCHAR(30) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    failed_login_count INT NOT NULL DEFAULT 0,
+    locked_until TIMESTAMP NULL,
+    last_login_at TIMESTAMP NULL
+);
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_code VARCHAR(50) NOT NULL UNIQUE,
+    tenant_name VARCHAR(255) NOT NULL,
+    legal_name VARCHAR(255),
+    contact_email VARCHAR(255),
+    status VARCHAR(20) NOT NULL,
+    timezone_name VARCHAR(64) NOT NULL,
+    default_currency VARCHAR(3) NOT NULL,
+    settings_json JSON NOT NULL,
+    provisioned_by_admin_id VARCHAR(36),
+    provisioned_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+
+CREATE TABLE IF NOT EXISTS subscription_plans (
+    id VARCHAR(36) PRIMARY KEY,
+    plan_code VARCHAR(50) NOT NULL UNIQUE,
+    plan_name VARCHAR(150) NOT NULL DEFAULT 'Test plan',
+    status VARCHAR(20) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    subscription_plan_id VARCHAR(36) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    starts_at TIMESTAMP NOT NULL,
+    trial_ends_at TIMESTAMP,
+    current_period_ends_at TIMESTAMP,
+    created_by_admin_id VARCHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tenant_users (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    display_name VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    provisioned_by_admin_id VARCHAR(36),
+    provisioned_by_user_id VARCHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    UNIQUE (tenant_id, email)
+);
+
+CREATE TABLE IF NOT EXISTS tenant_user_credentials (
+    tenant_user_id VARCHAR(36) PRIMARY KEY,
+    password_hash VARCHAR(255) NOT NULL,
+    password_algorithm VARCHAR(30) NOT NULL,
+    must_change_password BOOLEAN NOT NULL,
+    credential_version INT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36),
+    tenant_scope_key VARCHAR(36) NOT NULL,
+    role_code VARCHAR(50) NOT NULL,
+    is_system BOOLEAN NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tenant_user_roles (
+    tenant_user_id VARCHAR(36) NOT NULL,
+    tenant_id VARCHAR(36) NOT NULL,
+    role_id VARCHAR(36) NOT NULL,
+    role_scope_key VARCHAR(36) NOT NULL,
+    assigned_by_user_id VARCHAR(36),
+    PRIMARY KEY (tenant_user_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS data_protection_policies (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NOT NULL,
+    data_category VARCHAR(50) NOT NULL,
+    retention_days INT NOT NULL,
+    encrypt_at_rest BOOLEAN NOT NULL,
+    redact_in_logs BOOLEAN NOT NULL,
+    allow_ai_processing BOOLEAN NOT NULL,
+    purge_enabled BOOLEAN NOT NULL,
+    policy_version VARCHAR(30) NOT NULL,
+    UNIQUE (tenant_id, data_category)
+);
+
+CREATE TABLE IF NOT EXISTS login_sessions (
+    id VARCHAR(36) PRIMARY KEY,
+    actor_type VARCHAR(20) NOT NULL,
+    platform_admin_id VARCHAR(36),
+    tenant_user_id VARCHAR(36),
+    session_token_hash VARCHAR(64) NOT NULL UNIQUE,
+    auth_stage VARCHAR(30) NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent VARCHAR(500),
+    issued_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS security_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id VARCHAR(36),
+    actor_type VARCHAR(20) NOT NULL,
+    actor_id VARCHAR(36),
+    action_code VARCHAR(100) NOT NULL,
+    target_type VARCHAR(50),
+    target_id VARCHAR(200),
+    result VARCHAR(20) NOT NULL,
+    ip_address VARCHAR(45),
+    metadata_json JSON NOT NULL
+);
