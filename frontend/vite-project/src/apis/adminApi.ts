@@ -7,6 +7,8 @@ import type {
   TenantPage,
   TenantStatus,
 } from '../types/admin'
+import type { SubscriptionPlan, PlanStatus } from '../pages/plan/plan.types'
+
 
 const adminApi = axios.create({
   baseURL: import.meta.env.VITE_ADMIN_API_URL ?? 'http://localhost:8080',
@@ -98,3 +100,123 @@ export function getApiErrorMessage(error: unknown) {
     ?? axiosError.response.data?.title
     ?? 'Không thể xử lý yêu cầu.'
 }
+
+export interface SubscriptionPlanResponseDTO {
+  planId: string
+  planCode: string
+  planName: string
+  billingPeriod: string
+  priceAmount: number
+  currency: string
+  limits: Record<string, any>
+  features: Record<string, any>
+  status: PlanStatus
+  createdAt: string
+  updatedAt: string
+  activeTenantsCount: number
+}
+
+export interface SubscriptionPlanPageResponseDTO {
+  items: SubscriptionPlanResponseDTO[]
+  totalElements: number
+  page: number
+  size: number
+  totalPages: number
+}
+
+export function mapPlanResponseDTOToPlan(dto: SubscriptionPlanResponseDTO): SubscriptionPlan {
+  return {
+    id: dto.planId,
+    plan_code: dto.planCode,
+    plan_name: dto.planName,
+    billing_period: dto.billingPeriod as any,
+    price_amount: dto.priceAmount,
+    currency: dto.currency,
+    status: dto.status,
+    created_at: dto.createdAt,
+    updated_at: dto.updatedAt,
+    active_tenants_count: dto.activeTenantsCount || 0,
+    limits: {
+      ai_monthly_tokens: Number(dto.limits?.ai_monthly_tokens ?? 0),
+      ai_daily_runs: Number(dto.limits?.ai_daily_runs ?? 0),
+      ai_max_kb_docs: Number(dto.limits?.ai_max_kb_docs ?? 0),
+      ai_max_rag_chunks: Number(dto.limits?.ai_max_rag_chunks ?? 0),
+      ai_allowed_models: Array.isArray(dto.limits?.ai_allowed_models) ? dto.limits.ai_allowed_models : [],
+      max_marketplace_accounts: Number(dto.limits?.max_marketplace_accounts ?? 0),
+      max_tenant_users: Number(dto.limits?.max_tenant_users ?? 0),
+      max_products: Number(dto.limits?.max_products ?? 0),
+      max_monthly_orders: Number(dto.limits?.max_monthly_orders ?? 0),
+    },
+    features: {
+      allow_ai_auto_reply: Boolean(dto.features?.allow_ai_auto_reply),
+      allow_rag_knowledge: Boolean(dto.features?.allow_rag_knowledge),
+      allow_post_purchase_care: Boolean(dto.features?.allow_post_purchase_care),
+      allow_multi_channel_sync: Boolean(dto.features?.allow_multi_channel_sync),
+      allow_analytics_alerts: Boolean(dto.features?.allow_analytics_alerts),
+      allow_priority_support: Boolean(dto.features?.allow_priority_support),
+      custom_ai_prompt: Boolean(dto.features?.custom_ai_prompt),
+    }
+  }
+}
+
+export function mapPlanToRequestPayload(plan: Partial<SubscriptionPlan>) {
+  return {
+    planCode: plan.plan_code,
+    planName: plan.plan_name,
+    billingPeriod: plan.billing_period,
+    priceAmount: plan.price_amount,
+    currency: plan.currency || 'VND',
+    limits: plan.limits,
+    features: plan.features,
+    status: plan.status,
+  }
+}
+
+export async function getPlans(params: {
+  search?: string
+  status?: PlanStatus | 'ALL'
+  page?: number
+  size?: number
+}) {
+  const response = await adminApi.get<SubscriptionPlanPageResponseDTO>('/api/admin/plans', { params })
+  return {
+    items: response.data.items.map(mapPlanResponseDTOToPlan),
+    totalElements: response.data.totalElements,
+    page: response.data.page,
+    size: response.data.size,
+    totalPages: response.data.totalPages,
+  }
+}
+
+export async function createPlan(plan: Partial<SubscriptionPlan>) {
+  const csrf = await getCsrfToken()
+  const payload = mapPlanToRequestPayload(plan)
+  const response = await adminApi.post<SubscriptionPlanResponseDTO>(
+    '/api/admin/plans',
+    payload,
+    { headers: { [csrf.headerName]: csrf.token } },
+  )
+  return mapPlanResponseDTOToPlan(response.data)
+}
+
+export async function updatePlan(planId: string, plan: Partial<SubscriptionPlan>) {
+  const csrf = await getCsrfToken()
+  const payload = mapPlanToRequestPayload(plan)
+  const response = await adminApi.put<SubscriptionPlanResponseDTO>(
+    `/api/admin/plans/${planId}`,
+    payload,
+    { headers: { [csrf.headerName]: csrf.token } },
+  )
+  return mapPlanResponseDTOToPlan(response.data)
+}
+
+export async function updatePlanStatus(planId: string, status: PlanStatus) {
+  const csrf = await getCsrfToken()
+  const response = await adminApi.patch<SubscriptionPlanResponseDTO>(
+    `/api/admin/plans/${planId}/status`,
+    { status },
+    { headers: { [csrf.headerName]: csrf.token } },
+  )
+  return mapPlanResponseDTOToPlan(response.data)
+}
+
