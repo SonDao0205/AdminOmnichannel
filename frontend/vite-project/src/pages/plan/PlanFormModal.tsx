@@ -7,12 +7,14 @@ import {
   CheckCircleOutlined,
   SafetyCertificateOutlined
 } from '@ant-design/icons'
+import axios from 'axios'
 import type { SubscriptionPlan, BillingPeriod, PlanStatus } from './plan.types'
+import { getApiErrorMessage } from '../../apis/adminApi'
 
 interface PlanFormModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (planData: Partial<SubscriptionPlan>) => void
+  onSave: (planData: Partial<SubscriptionPlan>) => Promise<void>
   editingPlan?: SubscriptionPlan | null
 }
 
@@ -54,7 +56,12 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
     }
   })
 
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   useEffect(() => {
+    setFormErrors({})
+    setIsSubmitting(false)
     if (editingPlan) {
       setFormData({
         ...editingPlan,
@@ -125,9 +132,40 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
     handleLimitChange('ai_allowed_models', updated)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    setFormErrors({})
+    setIsSubmitting(true)
+    try {
+      await onSave(formData)
+    } catch (error: any) {
+      console.error("Validation error inside Modal:", error)
+      if (axios.isAxiosError(error) && error.response && error.response.data) {
+        const data = error.response.data
+        // Read "errors" field from Spring validation (e.g. FieldName: Message)
+        if (data.errors && typeof data.errors === 'object') {
+          // Map backend field names (camelCase) to frontend form field names (snake_case)
+          const mappedErrors: Record<string, string> = {}
+          Object.entries(data.errors).forEach(([key, val]) => {
+            let frontendKey = key
+            if (key === 'planCode') frontendKey = 'plan_code'
+            if (key === 'planName') frontendKey = 'plan_name'
+            if (key === 'billingPeriod') frontendKey = 'billing_period'
+            if (key === 'priceAmount') frontendKey = 'price_amount'
+            mappedErrors[frontendKey] = val as string
+          })
+          setFormErrors(mappedErrors)
+        } else if (data.detail) {
+          setFormErrors({ general: data.detail })
+        } else {
+          setFormErrors({ general: getApiErrorMessage(error) })
+        }
+      } else {
+        setFormErrors({ general: 'Đã có lỗi xảy ra. Vui lòng thử lại.' })
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -143,54 +181,78 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
               <p>Quản lý giá, giới hạn gian hàng & phân bổ Quota AI cho Tenant</p>
             </div>
           </div>
-          <button className="btn-close-modal" onClick={onClose} type="button">
+          <button className="btn-close-modal" onClick={onClose} type="button" disabled={isSubmitting}>
             <CloseOutlined />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-body">
+          {formErrors.general && (
+            <div style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fee2e2', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500 }}>
+              {formErrors.general}
+            </div>
+          )}
+
           {/* SECTION 1: Thông tin cơ bản */}
           <div className="form-section">
             <div className="section-label">
               <ShoppingCartOutlined /> 1. Thông Tin Cơ Bản & Giá Thuê
             </div>
             <div className="form-grid-2">
-              <div className="form-group">
+              <div className={`form-group ${formErrors.plan_code ? 'has-error' : ''}`}>
                 <label>Mã Gói Cước (Code) *</label>
                 <input
                   type="text"
                   required
                   placeholder="VD: PLAN_PRO_V2"
                   value={formData.plan_code || ''}
-                  onChange={e => handleInputChange('plan_code', e.target.value.toUpperCase())}
+                  onChange={e => {
+                    handleInputChange('plan_code', e.target.value.toUpperCase())
+                    if (formErrors.plan_code) {
+                      setFormErrors(prev => ({ ...prev, plan_code: '' }))
+                    }
+                  }}
                 />
+                {formErrors.plan_code && <span className="error-message">{formErrors.plan_code}</span>}
               </div>
-              <div className="form-group">
+              <div className={`form-group ${formErrors.plan_name ? 'has-error' : ''}`}>
                 <label>Tên Gói Dịch Vụ *</label>
                 <input
                   type="text"
                   required
                   placeholder="VD: Gói Chuyên Nghiệp AI"
                   value={formData.plan_name || ''}
-                  onChange={e => handleInputChange('plan_name', e.target.value)}
+                  onChange={e => {
+                    handleInputChange('plan_name', e.target.value)
+                    if (formErrors.plan_name) {
+                      setFormErrors(prev => ({ ...prev, plan_name: '' }))
+                    }
+                  }}
                 />
+                {formErrors.plan_name && <span className="error-message">{formErrors.plan_name}</span>}
               </div>
             </div>
 
             <div className="form-grid-3">
-              <div className="form-group">
+              <div className={`form-group ${formErrors.billing_period ? 'has-error' : ''}`}>
                 <label>Chu Kỳ Thanh Toán</label>
                 <select
                   value={formData.billing_period || 'MONTHLY'}
-                  onChange={e => handleInputChange('billing_period', e.target.value as BillingPeriod)}
+                  onChange={e => {
+                    handleInputChange('billing_period', e.target.value as BillingPeriod)
+                    if (formErrors.billing_period) {
+                      setFormErrors(prev => ({ ...prev, billing_period: '' }))
+                    }
+                  }}
                 >
                   <option value="MONTHLY">Hằng Tháng (Monthly)</option>
                   <option value="QUARTERLY">Hằng Quý (Quarterly)</option>
                   <option value="YEARLY">Hằng Năm (Yearly)</option>
                   <option value="CUSTOM">Tùy Chỉnh (Custom)</option>
                 </select>
+                {formErrors.billing_period && <span className="error-message">{formErrors.billing_period}</span>}
               </div>
-              <div className="form-group">
+              <div className={`form-group ${formErrors.price_amount ? 'has-error' : ''}`}>
                 <label>Giá Thuê (VND) *</label>
                 <input
                   type="number"
@@ -198,19 +260,31 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                   min={0}
                   step={10000}
                   value={formData.price_amount ?? 0}
-                  onChange={e => handleInputChange('price_amount', Number(e.target.value))}
+                  onChange={e => {
+                    handleInputChange('price_amount', Number(e.target.value))
+                    if (formErrors.price_amount) {
+                      setFormErrors(prev => ({ ...prev, price_amount: '' }))
+                    }
+                  }}
                 />
+                {formErrors.price_amount && <span className="error-message">{formErrors.price_amount}</span>}
               </div>
-              <div className="form-group">
+              <div className={`form-group ${formErrors.status ? 'has-error' : ''}`}>
                 <label>Trạng Thái</label>
                 <select
                   value={formData.status || 'ACTIVE'}
-                  onChange={e => handleInputChange('status', e.target.value as PlanStatus)}
+                  onChange={e => {
+                    handleInputChange('status', e.target.value as PlanStatus)
+                    if (formErrors.status) {
+                      setFormErrors(prev => ({ ...prev, status: '' }))
+                    }
+                  }}
                 >
                   <option value="ACTIVE">HOẠT ĐỘNG (Active)</option>
                   <option value="INACTIVE">TẠM DỪNG (Inactive)</option>
                   <option value="ARCHIVED">LƯU TRỮ (Archived)</option>
                 </select>
+                {formErrors.status && <span className="error-message">{formErrors.status}</span>}
               </div>
             </div>
           </div>
@@ -367,11 +441,11 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
         </form>
 
         <div className="modal-footer">
-          <button className="btn-cancel" onClick={onClose} type="button">
+          <button className="btn-cancel" onClick={onClose} type="button" disabled={isSubmitting}>
             Hủy Bỏ
           </button>
-          <button className="btn-submit" onClick={handleSubmit} type="button">
-            {editingPlan ? 'Lưu Thay Đổi' : 'Tạo Gói Cước Mới'}
+          <button className="btn-submit" onClick={handleSubmit} type="button" disabled={isSubmitting}>
+            {isSubmitting ? 'Đang Xử Lý...' : editingPlan ? 'Lưu Thay Đổi' : 'Tạo Gói Cước Mới'}
           </button>
         </div>
       </div>
