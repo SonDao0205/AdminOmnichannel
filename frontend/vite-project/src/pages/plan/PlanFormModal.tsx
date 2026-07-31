@@ -10,6 +10,7 @@ import {
 import axios from 'axios'
 import type { SubscriptionPlan, BillingPeriod, PlanStatus } from './plan.types'
 import { getApiErrorMessage } from '../../apis/adminApi'
+import { validateSubscriptionPlan } from '../../validation/planValidation'
 
 interface PlanFormModalProps {
   isOpen: boolean
@@ -134,7 +135,10 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setFormErrors({})
+    const validationErrors = validateSubscriptionPlan(formData)
+    setFormErrors(validationErrors)
+    if (Object.keys(validationErrors).length > 0) return
+
     setIsSubmitting(true)
     try {
       await onSave(formData)
@@ -186,7 +190,7 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-body">
+        <form noValidate onSubmit={handleSubmit} className="modal-body">
           {formErrors.general && (
             <div style={{ color: '#ef4444', background: '#fef2f2', border: '1px solid #fee2e2', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500 }}>
               {formErrors.general}
@@ -203,7 +207,6 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                 <label>Mã Gói Cước (Code) *</label>
                 <input
                   type="text"
-                  required
                   placeholder="VD: PLAN_PRO_V2"
                   value={formData.plan_code || ''}
                   onChange={e => {
@@ -219,7 +222,6 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                 <label>Tên Gói Dịch Vụ *</label>
                 <input
                   type="text"
-                  required
                   placeholder="VD: Gói Chuyên Nghiệp AI"
                   value={formData.plan_name || ''}
                   onChange={e => {
@@ -256,8 +258,6 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                 <label>Giá Thuê (VND) *</label>
                 <input
                   type="number"
-                  required
-                  min={0}
                   step={10000}
                   value={formData.price_amount ?? 0}
                   onChange={e => {
@@ -299,8 +299,6 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                 <label>Max AI Tokens / Tháng *</label>
                 <input
                   type="number"
-                  required
-                  min={100000}
                   step={100000}
                   value={formData.limits?.ai_monthly_tokens ?? 2000000}
                   onChange={e => handleLimitChange('ai_monthly_tokens', Number(e.target.value))}
@@ -313,8 +311,6 @@ export default function PlanFormModal({ isOpen, onClose, onSave, editingPlan }: 
                 <label>Max Runs AI Auto-Reply / Ngày *</label>
                 <input
                   type="number"
-                  required
-                  min={50}
                   step={50}
                   value={formData.limits?.ai_daily_runs ?? 1000}
                   onChange={e => handleLimitChange('ai_daily_runs', Number(e.target.value))}

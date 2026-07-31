@@ -111,6 +111,17 @@
   color: #a5afbd;
 }
 
+.login-field.is-invalid .login-input {
+  border-color: #f04438;
+  box-shadow: 0 0 0 3px rgba(240, 68, 56, 0.08);
+}
+
+.login-field-error {
+  color: #b42318;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .password-toggle {
   width: 28px;
   height: 28px;

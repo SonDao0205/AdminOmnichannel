@@ -10,6 +10,13 @@ import { useNavigate } from 'react-router-dom'
 import { getApiErrorMessage } from '../../apis/adminApi'
 import { useAuth } from '../../contexts/auth'
 import { ROUTES } from '../../routes/paths'
+import {
+  hasValidationErrors,
+  normalizeLoginValues,
+  validateLogin,
+  type FieldErrors,
+  type LoginValues,
+} from '../../validation/adminValidation'
 import './login.css'
 
 export default function LoginScreen() {
@@ -20,6 +27,8 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] =
+    useState<FieldErrors<LoginValues>>({})
 
   useEffect(() => {
     if (!sessionLoading && admin) {
@@ -30,9 +39,14 @@ export default function LoginScreen() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
+    const values = normalizeLoginValues({ email, password })
+    const validationErrors = validateLogin(values)
+    setFieldErrors(validationErrors)
+    if (hasValidationErrors(validationErrors)) return
+
     setSubmitting(true)
     try {
-      await login(email.trim(), password)
+      await login(values.email, values.password)
       navigate(ROUTES.account, { replace: true })
     } catch (requestError) {
       setError(getApiErrorMessage(requestError))
@@ -53,33 +67,57 @@ export default function LoginScreen() {
           Truy cập khu vực quản lý tài khoản thuê của hệ thống.
         </p>
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label className="login-field">
+        <form className="login-form" noValidate onSubmit={handleSubmit}>
+          <label
+            className={`login-field ${fieldErrors.email ? 'is-invalid' : ''}`}
+          >
             <span>Email quản trị</span>
             <span className="login-input">
               <MailOutlined aria-hidden="true" />
               <input
+                aria-describedby={fieldErrors.email ? 'admin-email-error' : undefined}
+                aria-invalid={Boolean(fieldErrors.email)}
                 autoComplete="username"
                 autoFocus
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setFieldErrors((current) => ({
+                    ...current,
+                    email: undefined,
+                  }))
+                }}
                 placeholder="admin@omnichannel.vn"
-                required
                 type="email"
                 value={email}
               />
             </span>
+            {fieldErrors.email && (
+              <small className="login-field-error" id="admin-email-error">
+                {fieldErrors.email}
+              </small>
+            )}
           </label>
 
-          <label className="login-field">
+          <label
+            className={`login-field ${fieldErrors.password ? 'is-invalid' : ''}`}
+          >
             <span>Mật khẩu</span>
             <span className="login-input">
               <LockOutlined aria-hidden="true" />
               <input
+                aria-describedby={
+                  fieldErrors.password ? 'admin-password-error' : undefined
+                }
+                aria-invalid={Boolean(fieldErrors.password)}
                 autoComplete="current-password"
-                minLength={12}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value)
+                  setFieldErrors((current) => ({
+                    ...current,
+                    password: undefined,
+                  }))
+                }}
                 placeholder="Nhập mật khẩu của bạn"
-                required
                 type={showPassword ? 'text' : 'password'}
                 value={password}
               />
@@ -92,6 +130,11 @@ export default function LoginScreen() {
                 {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
               </button>
             </span>
+            {fieldErrors.password && (
+              <small className="login-field-error" id="admin-password-error">
+                {fieldErrors.password}
+              </small>
+            )}
           </label>
 
           {error && <p className="login-error" role="alert">{error}</p>}

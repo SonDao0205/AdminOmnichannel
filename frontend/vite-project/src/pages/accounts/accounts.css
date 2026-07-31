@@ -636,6 +636,20 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
+.tenant-form label.is-invalid input,
+.tenant-form label.is-invalid select {
+  border-color: #f04438;
+  background: #fffafa;
+  box-shadow: 0 0 0 3px rgba(240, 68, 56, 0.08);
+}
+
+.tenant-form label > .tenant-field-error {
+  color: #b42318;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .tenant-form-actions {
   display: flex;
   justify-content: flex-end;

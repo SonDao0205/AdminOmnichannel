@@ -81,7 +81,7 @@ export default function AIQuotaModal({ isOpen, plan, onClose, onSaveQuota }: AIQ
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-body">
+        <form noValidate onSubmit={handleSubmit} className="modal-body">
           {/* Monthly Tokens */}
           <div className="form-group">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -92,7 +92,6 @@ export default function AIQuotaModal({ isOpen, plan, onClose, onSaveQuota }: AIQ
             </label>
             <input
               type="number"
-              required
               min={100000}
               step={100000}
               value={limits.ai_monthly_tokens}

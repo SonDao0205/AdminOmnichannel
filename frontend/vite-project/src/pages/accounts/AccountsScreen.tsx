@@ -19,14 +19,23 @@ import { toast } from 'react-toastify'
 import {
   createTenant,
   getApiErrorMessage,
+  getApiValidationErrors,
+  getPlans,
   getTenants,
 } from '../../apis/adminApi'
+import type { SubscriptionPlan } from '../plan/plan.types'
 import type {
   CreatedTenant,
   CreateTenantPayload,
   TenantListItem,
   TenantStatus,
 } from '../../types/admin'
+import {
+  hasValidationErrors,
+  normalizeCreateTenant,
+  validateCreateTenant,
+  type FieldErrors,
+} from '../../validation/adminValidation'
 import './accounts.css'
 
 const PAGE_SIZE = 8
@@ -38,7 +47,7 @@ const initialForm: CreateTenantPayload = {
   contactEmail: '',
   timezoneName: 'Asia/Ho_Chi_Minh',
   defaultCurrency: 'VND',
-  subscriptionPlanCode: 'DEMO',
+  subscriptionPlanCode: '',
   trialDays: 14,
   ownerEmail: '',
   ownerDisplayName: '',
@@ -81,6 +90,11 @@ export default function AccountsScreen() {
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<CreateTenantPayload>(initialForm)
+  const [formErrors, setFormErrors] =
+    useState<FieldErrors<CreateTenantPayload>>({})
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [plansError, setPlansError] = useState('')
   const [createdTenant, setCreatedTenant] = useState<CreatedTenant | null>(null)
   const [selectedTenant, setSelectedTenant] = useState<TenantListItem | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -118,6 +132,31 @@ export default function AccountsScreen() {
     }
   }, [page, reloadKey, search, status])
 
+  const loadAvailablePlans = async () => {
+    setPlansLoading(true)
+    setPlansError('')
+    try {
+      const response = await getPlans({ status: 'ACTIVE', page: 0, size: 100 })
+      setAvailablePlans(response.items)
+      setForm((current) => {
+        const currentPlanExists = response.items.some(
+          (plan) => plan.plan_code === current.subscriptionPlanCode,
+        )
+        return {
+          ...current,
+          subscriptionPlanCode: currentPlanExists
+            ? current.subscriptionPlanCode
+            : (response.items[0]?.plan_code ?? ''),
+        }
+      })
+    } catch (error) {
+      setAvailablePlans([])
+      setPlansError(getApiErrorMessage(error))
+    } finally {
+      setPlansLoading(false)
+    }
+  }
+
   const pageNumbers = useMemo(() => {
     if (totalPages <= 1) return [0]
     const start = Math.max(0, Math.min(page - 1, totalPages - 3))
@@ -129,29 +168,38 @@ export default function AccountsScreen() {
     value: CreateTenantPayload[Key],
   ) => {
     setForm((current) => ({ ...current, [key]: value }))
+    setFormErrors((current) => ({ ...current, [key]: undefined }))
   }
 
   const openCreateModal = () => {
     setForm(initialForm)
+    setFormErrors({})
     setCreatedTenant(null)
     setShowCreate(true)
+    void loadAvailablePlans()
   }
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const normalizedForm = normalizeCreateTenant(form)
+    const validationErrors = validateCreateTenant(normalizedForm)
+    setFormErrors(validationErrors)
+    if (hasValidationErrors(validationErrors)) return
+
     setCreating(true)
     try {
-      const response = await createTenant({
-        ...form,
-        tenantCode: form.tenantCode.trim().toUpperCase(),
-        defaultCurrency: form.defaultCurrency.trim().toUpperCase(),
-        subscriptionPlanCode: form.subscriptionPlanCode.trim().toUpperCase(),
-      })
+      const response = await createTenant(normalizedForm)
       setCreatedTenant(response)
       setLoading(true)
       setReloadKey((current) => current + 1)
       toast.success('Tạo tài khoản tenant thành công')
     } catch (error) {
+      const backendErrors = getApiValidationErrors(error)
+      if (backendErrors) {
+        setFormErrors(
+          backendErrors as FieldErrors<CreateTenantPayload>,
+        )
+      }
       toast.error(getApiErrorMessage(error))
     } finally {
       setCreating(false)
@@ -447,56 +495,68 @@ export default function AccountsScreen() {
                 </button>
               </div>
             ) : (
-              <form className="tenant-form" onSubmit={handleCreate}>
+              <form className="tenant-form" noValidate onSubmit={handleCreate}>
                 <div className="tenant-form-section">
                   <div className="tenant-form-heading">
                     <strong>Thông tin doanh nghiệp</strong>
                     <span>Thông tin nhận diện tài khoản tenant.</span>
                   </div>
                   <div className="tenant-form-grid">
-                    <label>
+                    <label className={formErrors.tenantCode ? 'is-invalid' : ''}>
                       <span>Mã tenant *</span>
                       <input
-                        maxLength={50}
+                        aria-invalid={Boolean(formErrors.tenantCode)}
                         onChange={(event) => updateForm('tenantCode', event.target.value)}
-                        pattern="[A-Za-z][A-Za-z0-9_]{2,49}"
                         placeholder="SHOP_001"
-                        required
                         value={form.tenantCode}
                       />
+                      {formErrors.tenantCode && (
+                        <small className="tenant-field-error">{formErrors.tenantCode}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.tenantName ? 'is-invalid' : ''}>
                       <span>Tên tenant *</span>
                       <input
-                        maxLength={255}
-                        minLength={2}
+                        aria-invalid={Boolean(formErrors.tenantName)}
                         onChange={(event) => updateForm('tenantName', event.target.value)}
                         placeholder="Cửa hàng thời trang ABC"
-                        required
                         value={form.tenantName}
                       />
+                      {formErrors.tenantName && (
+                        <small className="tenant-field-error">{formErrors.tenantName}</small>
+                      )}
                     </label>
-                    <label className="tenant-form-wide">
+                    <label
+                      className={`tenant-form-wide ${formErrors.legalName ? 'is-invalid' : ''}`}
+                    >
                       <span>Tên pháp lý</span>
                       <input
-                        maxLength={255}
+                        aria-invalid={Boolean(formErrors.legalName)}
                         onChange={(event) => updateForm('legalName', event.target.value)}
                         placeholder="Công ty TNHH Thời trang ABC"
                         value={form.legalName}
                       />
+                      {formErrors.legalName && (
+                        <small className="tenant-field-error">{formErrors.legalName}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.contactEmail ? 'is-invalid' : ''}>
                       <span>Email liên hệ</span>
                       <input
+                        aria-invalid={Boolean(formErrors.contactEmail)}
                         onChange={(event) => updateForm('contactEmail', event.target.value)}
                         placeholder="contact@abc.vn"
                         type="email"
                         value={form.contactEmail}
                       />
+                      {formErrors.contactEmail && (
+                        <small className="tenant-field-error">{formErrors.contactEmail}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.timezoneName ? 'is-invalid' : ''}>
                       <span>Múi giờ *</span>
                       <select
+                        aria-invalid={Boolean(formErrors.timezoneName)}
                         onChange={(event) => updateForm('timezoneName', event.target.value)}
                         value={form.timezoneName}
                       >
@@ -504,6 +564,9 @@ export default function AccountsScreen() {
                         <option value="Asia/Bangkok">Asia/Bangkok</option>
                         <option value="Asia/Singapore">Asia/Singapore</option>
                       </select>
+                      {formErrors.timezoneName && (
+                        <small className="tenant-field-error">{formErrors.timezoneName}</small>
+                      )}
                     </label>
                   </div>
                 </div>
@@ -514,26 +577,30 @@ export default function AccountsScreen() {
                     <span>Người dùng nhận quyền quản lý tenant.</span>
                   </div>
                   <div className="tenant-form-grid">
-                    <label>
+                    <label className={formErrors.ownerDisplayName ? 'is-invalid' : ''}>
                       <span>Họ tên quản lý *</span>
                       <input
-                        maxLength={255}
-                        minLength={2}
+                        aria-invalid={Boolean(formErrors.ownerDisplayName)}
                         onChange={(event) => updateForm('ownerDisplayName', event.target.value)}
                         placeholder="Nguyễn Văn An"
-                        required
                         value={form.ownerDisplayName}
                       />
+                      {formErrors.ownerDisplayName && (
+                        <small className="tenant-field-error">{formErrors.ownerDisplayName}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.ownerEmail ? 'is-invalid' : ''}>
                       <span>Email đăng nhập *</span>
                       <input
+                        aria-invalid={Boolean(formErrors.ownerEmail)}
                         onChange={(event) => updateForm('ownerEmail', event.target.value)}
                         placeholder="manager@abc.vn"
-                        required
                         type="email"
                         value={form.ownerEmail}
                       />
+                      {formErrors.ownerEmail && (
+                        <small className="tenant-field-error">{formErrors.ownerEmail}</small>
+                      )}
                     </label>
                   </div>
                 </div>
@@ -544,28 +611,49 @@ export default function AccountsScreen() {
                     <span>Cấu hình thuê ban đầu của tenant.</span>
                   </div>
                   <div className="tenant-form-grid is-three">
-                    <label>
-                      <span>Mã gói *</span>
-                      <input
+                    <label className={formErrors.subscriptionPlanCode ? 'is-invalid' : ''}>
+                      <span>Gói dịch vụ *</span>
+                      <select
+                        aria-invalid={Boolean(formErrors.subscriptionPlanCode)}
+                        disabled={plansLoading || availablePlans.length === 0}
                         onChange={(event) => updateForm('subscriptionPlanCode', event.target.value)}
-                        required
                         value={form.subscriptionPlanCode}
-                      />
+                      >
+                        {plansLoading && <option value="">Đang tải danh sách gói...</option>}
+                        {!plansLoading && availablePlans.length === 0 && (
+                          <option value="">Không có gói đang hoạt động</option>
+                        )}
+                        {availablePlans.map((plan) => (
+                          <option key={plan.id} value={plan.plan_code}>
+                            {plan.plan_name} ({plan.plan_code})
+                          </option>
+                        ))}
+                      </select>
+                      {formErrors.subscriptionPlanCode && (
+                        <small className="tenant-field-error">
+                          {formErrors.subscriptionPlanCode}
+                        </small>
+                      )}
+                      {plansError && (
+                        <small className="tenant-field-error">{plansError}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.trialDays ? 'is-invalid' : ''}>
                       <span>Số ngày dùng thử *</span>
                       <input
-                        max={365}
-                        min={1}
+                        aria-invalid={Boolean(formErrors.trialDays)}
                         onChange={(event) => updateForm('trialDays', Number(event.target.value))}
-                        required
                         type="number"
                         value={form.trialDays}
                       />
+                      {formErrors.trialDays && (
+                        <small className="tenant-field-error">{formErrors.trialDays}</small>
+                      )}
                     </label>
-                    <label>
+                    <label className={formErrors.defaultCurrency ? 'is-invalid' : ''}>
                       <span>Tiền tệ *</span>
                       <select
+                        aria-invalid={Boolean(formErrors.defaultCurrency)}
                         onChange={(event) => updateForm('defaultCurrency', event.target.value)}
                         value={form.defaultCurrency}
                       >
@@ -573,6 +661,9 @@ export default function AccountsScreen() {
                         <option value="USD">USD</option>
                         <option value="SGD">SGD</option>
                       </select>
+                      {formErrors.defaultCurrency && (
+                        <small className="tenant-field-error">{formErrors.defaultCurrency}</small>
+                      )}
                     </label>
                   </div>
                 </div>
@@ -585,7 +676,15 @@ export default function AccountsScreen() {
                   >
                     Hủy
                   </button>
-                  <button className="tenant-primary-button" disabled={creating} type="submit">
+                  <button
+                    className="tenant-primary-button"
+                    disabled={
+                      creating
+                      || plansLoading
+                      || availablePlans.length === 0
+                    }
+                    type="submit"
+                  >
                     {creating ? <span className="tenant-button-spinner" /> : <PlusOutlined />}
                     {creating ? 'Đang tạo...' : 'Tạo tài khoản'}
                   </button>

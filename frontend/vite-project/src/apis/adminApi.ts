@@ -101,6 +101,11 @@ export function getApiErrorMessage(error: unknown) {
     ?? 'Không thể xử lý yêu cầu.'
 }
 
+export function getApiValidationErrors(error: unknown) {
+  if (!axios.isAxiosError<ApiProblem>(error)) return undefined
+  return error.response?.data?.errors
+}
+
 export interface SubscriptionPlanResponseDTO {
   planId: string
   planCode: string
@@ -219,4 +224,3 @@ export async function updatePlanStatus(planId: string, status: PlanStatus) {
   )
   return mapPlanResponseDTOToPlan(response.data)
 }
-
