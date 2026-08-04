@@ -260,7 +260,7 @@
 }
 
 .tenant-action-col {
-  width: 100px;
+  width: 180px;
   text-align: right !important;
 }
 
@@ -356,7 +356,8 @@
   color: #475467;
 }
 
-.tenant-view-button {
+.tenant-view-button,
+.tenant-access-button {
   height: 32px;
   display: inline-flex;
   align-items: center;
@@ -374,6 +375,36 @@
 .tenant-view-button:hover {
   border-color: #bfdbfe;
   color: #2563eb;
+}
+
+.tenant-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tenant-access-button.is-lock {
+  border-color: #fecdca;
+  color: #b42318;
+}
+
+.tenant-access-button.is-unlock {
+  border-color: #abefc6;
+  color: #067647;
+}
+
+.tenant-access-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.tenant-inline-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: tenant-spin 700ms linear infinite;
 }
 
 .tenant-table-footer {
@@ -560,6 +591,12 @@
   color: #667085;
 }
 
+.tenant-modal-close:disabled,
+.tenant-cancel-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .tenant-form {
   padding: 0 20px 20px;
 }
@@ -598,6 +635,29 @@
 
 .tenant-form-grid.is-three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tenant-auto-code-note {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px dashed #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tenant-auto-code-note strong {
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.tenant-auto-code-note span {
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .tenant-form-wide {
@@ -759,6 +819,35 @@
 
 .tenant-detail-body > .tenant-status-pill {
   margin-bottom: 2px;
+}
+
+.tenant-detail-access {
+  width: 100%;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.tenant-detail-access.is-lock {
+  border: 1px solid #fecdca;
+  color: #b42318;
+}
+
+.tenant-detail-access.is-unlock {
+  border: 1px solid #abefc6;
+  color: #067647;
+}
+
+.tenant-detail-access:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }
 
 @keyframes tenant-spin {

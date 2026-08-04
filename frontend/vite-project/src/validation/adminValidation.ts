@@ -8,7 +8,6 @@ export type LoginValues = {
 export type FieldErrors<T> = Partial<Record<keyof T, string>>
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/
-const TENANT_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{2,49}$/
 const PLAN_CODE_PATTERN = /^[A-Za-z0-9_]{2,50}$/
 const CURRENCY_PATTERN = /^[A-Za-z]{3}$/
 
@@ -55,7 +54,6 @@ export function normalizeCreateTenant(
   values: CreateTenantPayload,
 ): CreateTenantPayload {
   return {
-    tenantCode: values.tenantCode.trim().toUpperCase(),
     tenantName: values.tenantName.trim(),
     legalName: values.legalName.trim(),
     contactEmail: values.contactEmail.trim().toLowerCase(),
@@ -73,13 +71,6 @@ export function validateCreateTenant(
 ): FieldErrors<CreateTenantPayload> {
   const values = normalizeCreateTenant(rawValues)
   const errors: FieldErrors<CreateTenantPayload> = {}
-
-  if (!values.tenantCode) {
-    errors.tenantCode = 'Mã tenant không được để trống.'
-  } else if (!TENANT_CODE_PATTERN.test(values.tenantCode)) {
-    errors.tenantCode =
-      'Mã tenant phải dài 3-50 ký tự, bắt đầu bằng chữ và chỉ chứa chữ, số hoặc dấu gạch dưới.'
-  }
 
   if (!values.tenantName) {
     errors.tenantName = 'Tên tenant không được để trống.'

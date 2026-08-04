@@ -5,6 +5,7 @@ import type {
   CreatedTenant,
   CreateTenantPayload,
   TenantPage,
+  TenantAccessResult,
   TenantStatus,
 } from '../types/admin'
 import type { SubscriptionPlan, PlanStatus } from '../pages/plan/plan.types'
@@ -68,6 +69,16 @@ export async function createTenant(payload: CreateTenantPayload) {
   const response = await adminApi.post<CreatedTenant>(
     '/api/admin/tenants',
     payload,
+    { headers: { [csrf.headerName]: csrf.token } },
+  )
+  return response.data
+}
+
+export async function setTenantLocked(tenantId: string, locked: boolean) {
+  const csrf = await getCsrfToken()
+  const response = await adminApi.patch<TenantAccessResult>(
+    `/api/admin/tenants/${tenantId}/access`,
+    { locked },
     { headers: { [csrf.headerName]: csrf.token } },
   )
   return response.data

@@ -1,13 +1,14 @@
 import {
   CheckCircleOutlined,
   CloseOutlined,
-  CopyOutlined,
   EyeOutlined,
+  LockOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
   ShopOutlined,
   TeamOutlined,
+  UnlockOutlined,
 } from '@ant-design/icons'
 import {
   useEffect,
@@ -22,6 +23,7 @@ import {
   getApiValidationErrors,
   getPlans,
   getTenants,
+  setTenantLocked,
 } from '../../apis/adminApi'
 import type { SubscriptionPlan } from '../plan/plan.types'
 import type {
@@ -41,7 +43,6 @@ import './accounts.css'
 const PAGE_SIZE = 8
 
 const initialForm: CreateTenantPayload = {
-  tenantCode: '',
   tenantName: '',
   legalName: '',
   contactEmail: '',
@@ -98,6 +99,7 @@ export default function AccountsScreen() {
   const [createdTenant, setCreatedTenant] = useState<CreatedTenant | null>(null)
   const [selectedTenant, setSelectedTenant] = useState<TenantListItem | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [changingAccessTenantId, setChangingAccessTenantId] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -192,7 +194,7 @@ export default function AccountsScreen() {
       setCreatedTenant(response)
       setLoading(true)
       setReloadKey((current) => current + 1)
-      toast.success('Tạo tài khoản tenant thành công')
+      toast.success('Tạo tài khoản thành công, mật khẩu đã được gửi qua email')
     } catch (error) {
       const backendErrors = getApiValidationErrors(error)
       if (backendErrors) {
@@ -206,10 +208,37 @@ export default function AccountsScreen() {
     }
   }
 
-  const copyTemporaryPassword = async () => {
-    if (!createdTenant) return
-    await navigator.clipboard.writeText(createdTenant.temporaryPassword)
-    toast.success('Đã sao chép mật khẩu tạm thời')
+  const handleTenantAccess = async (tenant: TenantListItem) => {
+    if (tenant.tenantStatus === 'CLOSED' || changingAccessTenantId) return
+    const locked = tenant.tenantStatus !== 'SUSPENDED'
+    const confirmed = window.confirm(
+      locked
+        ? `Khóa tài khoản ${tenant.tenantName}? Các phiên đăng nhập hiện tại sẽ bị thu hồi.`
+        : `Mở lại tài khoản ${tenant.tenantName}?`,
+    )
+    if (!confirmed) return
+
+    setChangingAccessTenantId(tenant.tenantId)
+    try {
+      const response = await setTenantLocked(tenant.tenantId, locked)
+      setTenants((current) => current.map((item) => (
+        item.tenantId === tenant.tenantId
+          ? { ...item, tenantStatus: response.tenantStatus }
+          : item
+      )))
+      setSelectedTenant((current) => (
+        current?.tenantId === tenant.tenantId
+          ? { ...current, tenantStatus: response.tenantStatus }
+          : current
+      ))
+      setLoading(true)
+      setReloadKey((current) => current + 1)
+      toast.success(locked ? 'Đã khóa tài khoản tenant' : 'Đã mở tài khoản tenant')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    } finally {
+      setChangingAccessTenantId(null)
+    }
   }
 
   return (
@@ -360,14 +389,33 @@ export default function AccountsScreen() {
                           </span>
                         </td>
                         <td className="tenant-action-col">
-                          <button
-                            className="tenant-view-button"
-                            onClick={() => setSelectedTenant(tenant)}
-                            type="button"
-                          >
-                            <EyeOutlined />
-                            Xem
-                          </button>
+                          <div className="tenant-row-actions">
+                            <button
+                              className="tenant-view-button"
+                              onClick={() => setSelectedTenant(tenant)}
+                              type="button"
+                            >
+                              <EyeOutlined />
+                              Xem
+                            </button>
+                            {tenant.tenantStatus !== 'CLOSED' && (
+                              <button
+                                className={`tenant-access-button ${tenant.tenantStatus === 'SUSPENDED' ? 'is-unlock' : 'is-lock'}`}
+                                disabled={changingAccessTenantId === tenant.tenantId}
+                                onClick={() => void handleTenantAccess(tenant)}
+                                type="button"
+                              >
+                                {changingAccessTenantId === tenant.tenantId ? (
+                                  <span className="tenant-inline-spinner" />
+                                ) : tenant.tenantStatus === 'SUSPENDED' ? (
+                                  <UnlockOutlined />
+                                ) : (
+                                  <LockOutlined />
+                                )}
+                                {tenant.tenantStatus === 'SUSPENDED' ? 'Mở' : 'Khóa'}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -444,6 +492,7 @@ export default function AccountsScreen() {
               <button
                 aria-label="Đóng"
                 className="tenant-modal-close"
+                disabled={creating}
                 onClick={() => setShowCreate(false)}
                 type="button"
               >
@@ -466,13 +515,8 @@ export default function AccountsScreen() {
                     <dd>{createdTenant.ownerEmail}</dd>
                   </div>
                   <div>
-                    <dt>Mật khẩu tạm thời</dt>
-                    <dd className="temporary-password">
-                      <code>{createdTenant.temporaryPassword}</code>
-                      <button onClick={copyTemporaryPassword} type="button">
-                        <CopyOutlined /> Sao chép
-                      </button>
-                    </dd>
+                    <dt>Gửi mật khẩu</dt>
+                    <dd>{createdTenant.credentialsEmailSent ? 'Đã gửi qua email' : 'Chưa gửi được'}</dd>
                   </div>
                   <div>
                     <dt>Vai trò</dt>
@@ -484,7 +528,7 @@ export default function AccountsScreen() {
                   </div>
                 </dl>
                 <p className="created-tenant-warning">
-                  Mật khẩu này chỉ hiển thị một lần. Hãy gửi cho người thuê qua kênh an toàn.
+                  Mật khẩu tạm thời chỉ được gửi đến email đăng nhập và không hiển thị trên hệ thống quản trị.
                 </p>
                 <button
                   className="tenant-primary-button tenant-modal-done"
@@ -495,25 +539,13 @@ export default function AccountsScreen() {
                 </button>
               </div>
             ) : (
-              <form className="tenant-form" noValidate onSubmit={handleCreate}>
+              <form aria-busy={creating} className="tenant-form" noValidate onSubmit={handleCreate}>
                 <div className="tenant-form-section">
                   <div className="tenant-form-heading">
                     <strong>Thông tin doanh nghiệp</strong>
                     <span>Thông tin nhận diện tài khoản tenant.</span>
                   </div>
                   <div className="tenant-form-grid">
-                    <label className={formErrors.tenantCode ? 'is-invalid' : ''}>
-                      <span>Mã tenant *</span>
-                      <input
-                        aria-invalid={Boolean(formErrors.tenantCode)}
-                        onChange={(event) => updateForm('tenantCode', event.target.value)}
-                        placeholder="SHOP_001"
-                        value={form.tenantCode}
-                      />
-                      {formErrors.tenantCode && (
-                        <small className="tenant-field-error">{formErrors.tenantCode}</small>
-                      )}
-                    </label>
                     <label className={formErrors.tenantName ? 'is-invalid' : ''}>
                       <span>Tên tenant *</span>
                       <input
@@ -526,6 +558,10 @@ export default function AccountsScreen() {
                         <small className="tenant-field-error">{formErrors.tenantName}</small>
                       )}
                     </label>
+                    <div className="tenant-auto-code-note">
+                      <strong>Mã tenant được tạo tự động</strong>
+                      <span>Hệ thống sẽ sinh mã duy nhất sau khi kiểm tra email và tạo tài khoản.</span>
+                    </div>
                     <label
                       className={`tenant-form-wide ${formErrors.legalName ? 'is-invalid' : ''}`}
                     >
@@ -671,6 +707,7 @@ export default function AccountsScreen() {
                 <footer className="tenant-form-actions">
                   <button
                     className="tenant-cancel-button"
+                    disabled={creating}
                     onClick={() => setShowCreate(false)}
                     type="button"
                   >
@@ -734,6 +771,25 @@ export default function AccountsScreen() {
                 <div><dt>Ngày tạo</dt><dd>{formatDate(selectedTenant.createdAt)}</dd></div>
                 <div><dt>Ngày hết hạn</dt><dd>{formatDate(selectedTenant.periodEndsAt ?? selectedTenant.trialEndsAt)}</dd></div>
               </dl>
+              {selectedTenant.tenantStatus !== 'CLOSED' && (
+                <button
+                  className={`tenant-detail-access ${selectedTenant.tenantStatus === 'SUSPENDED' ? 'is-unlock' : 'is-lock'}`}
+                  disabled={changingAccessTenantId === selectedTenant.tenantId}
+                  onClick={() => void handleTenantAccess(selectedTenant)}
+                  type="button"
+                >
+                  {changingAccessTenantId === selectedTenant.tenantId ? (
+                    <span className="tenant-inline-spinner" />
+                  ) : selectedTenant.tenantStatus === 'SUSPENDED' ? (
+                    <UnlockOutlined />
+                  ) : (
+                    <LockOutlined />
+                  )}
+                  {selectedTenant.tenantStatus === 'SUSPENDED'
+                    ? 'Mở lại tài khoản tenant'
+                    : 'Khóa tài khoản tenant'}
+                </button>
+              )}
             </div>
           </section>
         </div>

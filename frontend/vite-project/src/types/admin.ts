@@ -36,7 +36,6 @@ export type TenantPage = {
 }
 
 export type CreateTenantPayload = {
-  tenantCode: string
   tenantName: string
   legalName: string
   contactEmail: string
@@ -58,8 +57,15 @@ export type CreatedTenant = {
   ownerUserId: string
   ownerEmail: string
   assignedRole: string
-  temporaryPassword: string
+  credentialsEmailSent: boolean
   mustChangePassword: boolean
+}
+
+export type TenantAccessResult = {
+  tenantId: string
+  tenantStatus: TenantStatus
+  locked: boolean
+  revokedSessions: number
 }
 
 export type ApiProblem = {
