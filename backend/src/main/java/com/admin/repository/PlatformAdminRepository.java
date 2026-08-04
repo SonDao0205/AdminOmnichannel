@@ -2,20 +2,25 @@ package com.admin.repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import com.admin.entity.PlatformAdmin;
 import com.admin.security.PlatformAdminPrincipal;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 public class PlatformAdminRepository {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public PlatformAdminRepository(JdbcTemplate jdbcTemplate) {
+    public PlatformAdminRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public Optional<PlatformAdmin> findByEmailForUpdate(String email) {
@@ -179,7 +184,7 @@ public class PlatformAdminRepository {
                     tenant_id, actor_type, actor_id, action_code,
                     target_type, target_id, result, ip_address, metadata_json
                 ) VALUES (
-                    NULL, 'PLATFORM_ADMIN', ?, ?, ?, ?, ?, ?, JSON_OBJECT('reason', ?)
+                    NULL, 'PLATFORM_ADMIN', ?, ?, ?, ?, ?, ?, CAST(? AS jsonb)
                 )
                 """,
                 actorId,
@@ -188,7 +193,7 @@ public class PlatformAdminRepository {
                 targetId,
                 result,
                 ipAddress,
-                reason);
+                toJson(Map.of("reason", reason == null ? "" : reason)));
     }
 
     public Optional<BootstrapOwner> findBootstrapOwnerByEmailForUpdate(String email) {
@@ -267,5 +272,13 @@ public class PlatformAdminRepository {
     }
 
     public record BootstrapOwner(String id, String email, String passwordHash) {
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Could not serialize audit metadata", exception);
+        }
     }
 }

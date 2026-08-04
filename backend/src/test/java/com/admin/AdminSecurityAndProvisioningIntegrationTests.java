@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
@@ -15,16 +17,20 @@ import java.math.BigDecimal;
 import java.util.Map;
 
 import jakarta.servlet.http.Cookie;
+import jakarta.validation.Validator;
 
 import com.admin.dto.CreateTenantRequest;
 import com.admin.dto.SubscriptionPlanRequest;
 import com.admin.exception.SubscriptionPlanConflictException;
 import com.admin.exception.SubscriptionPlanNotFoundException;
 import com.admin.exception.TenantConflictException;
+import com.admin.exception.TenantEmailDeliveryException;
 import com.admin.security.PlatformAdminPrincipal;
 import com.admin.service.AdminAuthenticationService;
 import com.admin.service.SubscriptionPlanService;
 import com.admin.service.TenantProvisioningService;
+import com.admin.service.TenantCredentialEmailService;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +40,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -59,6 +66,12 @@ class AdminSecurityAndProvisioningIntegrationTests {
 
     @Autowired
     MockMvc mockMvc;
+
+    @Autowired
+    Validator validator;
+
+    @MockitoBean
+    TenantCredentialEmailService credentialEmailService;
 
     @BeforeEach
     void resetDatabase() {
@@ -262,7 +275,6 @@ class AdminSecurityAndProvisioningIntegrationTests {
         PlatformAdminPrincipal principal =
                 new PlatformAdminPrincipal(ADMIN_ID, "owner@example.com", "Owner", "session-id");
         CreateTenantRequest request = new CreateTenantRequest(
-                "shop_001",
                 "Cửa hàng 001",
                 "Công ty TNHH Shop 001",
                 "contact@shop001.example",
@@ -275,9 +287,10 @@ class AdminSecurityAndProvisioningIntegrationTests {
 
         var response = provisioningService.createTenant(request, principal, "127.0.0.1");
 
-        assertEquals("SHOP_001", response.tenantCode());
+        assertTrue(response.tenantCode().matches("TEN_[A-F0-9]{12}"));
         assertEquals("TRIAL", response.tenantStatus());
         assertEquals("TENANT_MANAGER", response.assignedRole());
+        assertTrue(response.credentialsEmailSent());
         assertTrue(response.mustChangePassword());
         assertEquals(1, count("tenants"));
         assertEquals(1, count("tenant_subscriptions"));
@@ -290,18 +303,121 @@ class AdminSecurityAndProvisioningIntegrationTests {
                 "SELECT password_hash FROM tenant_user_credentials WHERE tenant_user_id = ?",
                 String.class,
                 response.ownerUserId());
-        assertNotEquals(response.temporaryPassword(), storedPasswordHash);
-        assertTrue(passwordEncoder.matches(response.temporaryPassword(), storedPasswordHash));
+        ArgumentCaptor<String> passwordCaptor = ArgumentCaptor.forClass(String.class);
+        verify(credentialEmailService).sendTemporaryPassword(
+                org.mockito.ArgumentMatchers.eq("manager@shop001.example"),
+                org.mockito.ArgumentMatchers.eq("Quản lý Shop 001"),
+                org.mockito.ArgumentMatchers.eq("Cửa hàng 001"),
+                org.mockito.ArgumentMatchers.eq(response.tenantCode()),
+                passwordCaptor.capture());
+        assertNotEquals(passwordCaptor.getValue(), storedPasswordHash);
+        assertTrue(passwordEncoder.matches(passwordCaptor.getValue(), storedPasswordHash));
 
         assertThrows(
                 TenantConflictException.class,
                 () -> provisioningService.createTenant(request, principal, "127.0.0.1"));
         assertEquals(1, count("tenants"));
 
-        var page = provisioningService.listTenants("SHOP_001", "TRIAL", 0, 20);
+        var page = provisioningService.listTenants(response.tenantCode(), "TRIAL", 0, 20);
         assertEquals(1, page.totalElements());
-        assertEquals("SHOP_001", page.items().get(0).tenantCode());
+        assertEquals(response.tenantCode(), page.items().get(0).tenantCode());
         assertEquals("manager@shop001.example", page.items().get(0).ownerEmail());
+    }
+
+    @Test
+    void rejectsMalformedOwnerEmailBeforeTenantProvisioning() {
+        CreateTenantRequest request = new CreateTenantRequest(
+                "Invalid email tenant",
+                null,
+                null,
+                "Asia/Ho_Chi_Minh",
+                "VND",
+                "DEMO",
+                14,
+                "not-an-email",
+                "Invalid Email");
+
+        assertTrue(validator.validate(request).stream().anyMatch(violation ->
+                "ownerEmail".contentEquals(violation.getPropertyPath().toString())));
+        assertEquals(0, count("tenants"));
+    }
+
+    @Test
+    void locksAndUnlocksTenantAndRevokesActiveSessions() {
+        PlatformAdminPrincipal principal =
+                new PlatformAdminPrincipal(ADMIN_ID, "owner@example.com", "Owner", "session-id");
+        CreateTenantRequest request = new CreateTenantRequest(
+                "Tenant access test",
+                null,
+                null,
+                "Asia/Ho_Chi_Minh",
+                "VND",
+                "DEMO",
+                14,
+                "access-test@example.com",
+                "Access Test");
+        var tenant = provisioningService.createTenant(request, principal, "127.0.0.1");
+        jdbcTemplate.update(
+                """
+                INSERT INTO login_sessions (
+                    id, actor_type, tenant_user_id, session_token_hash, auth_stage,
+                    issued_at, expires_at
+                ) VALUES (?, 'TENANT_USER', ?, ?, 'AUTHENTICATED', CURRENT_TIMESTAMP, ?)
+                """,
+                "90000000-0000-0000-0000-000000000001",
+                tenant.ownerUserId(),
+                "active-tenant-session-hash",
+                java.sql.Timestamp.from(java.time.Instant.now().plusSeconds(3600)));
+
+        var locked = provisioningService.setTenantLocked(
+                tenant.tenantId(), true, principal, "127.0.0.1");
+        assertEquals("SUSPENDED", locked.tenantStatus());
+        assertTrue(locked.locked());
+        assertEquals(1, locked.revokedSessions());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM login_sessions WHERE revoked_at IS NOT NULL",
+                Integer.class));
+
+        var unlocked = provisioningService.setTenantLocked(
+                tenant.tenantId(), false, principal, "127.0.0.1");
+        assertEquals("TRIAL", unlocked.tenantStatus());
+        assertFalse(unlocked.locked());
+        assertEquals("TRIAL", jdbcTemplate.queryForObject(
+                "SELECT status FROM tenants WHERE id = ?",
+                String.class,
+                tenant.tenantId()));
+    }
+
+    @Test
+    void rollsBackEveryTenantRecordWhenCredentialEmailCannotBeSent() {
+        PlatformAdminPrincipal principal =
+                new PlatformAdminPrincipal(ADMIN_ID, "owner@example.com", "Owner", "session-id");
+        CreateTenantRequest request = new CreateTenantRequest(
+                "Tenant mail rollback",
+                null,
+                null,
+                "Asia/Ho_Chi_Minh",
+                "VND",
+                "DEMO",
+                14,
+                "mail-failure@example.com",
+                "Mail Failure");
+        doThrow(new TenantEmailDeliveryException("Email delivery failed", new RuntimeException()))
+                .when(credentialEmailService)
+                .sendTemporaryPassword(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString());
+
+        assertThrows(
+                TenantEmailDeliveryException.class,
+                () -> provisioningService.createTenant(request, principal, "127.0.0.1"));
+        assertEquals(0, count("tenants"));
+        assertEquals(0, count("tenant_users"));
+        assertEquals(0, count("tenant_user_credentials"));
+        assertEquals(0, count("security_audit_logs"));
     }
 
     @Test

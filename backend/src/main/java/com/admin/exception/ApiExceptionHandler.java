@@ -54,6 +54,30 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail);
         problem.setTitle("Conflict");
         problem.setType(URI.create("urn:omnichannel:problem:conflict"));
+        if (exception instanceof TenantEmailAlreadyExistsException) {
+            problem.setProperty("errors", Map.of("ownerEmail", exception.getMessage()));
+        }
+        return problem;
+    }
+
+    @ExceptionHandler(TenantNotFoundException.class)
+    ProblemDetail handleTenantNotFound(TenantNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage());
+        problem.setTitle("Tenant not found");
+        problem.setType(URI.create("urn:omnichannel:problem:tenant-not-found"));
+        return problem;
+    }
+
+    @ExceptionHandler(TenantEmailDeliveryException.class)
+    ProblemDetail handleEmailDelivery(TenantEmailDeliveryException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                exception.getMessage());
+        problem.setTitle("Email cannot be delivered");
+        problem.setType(URI.create("urn:omnichannel:problem:email-delivery"));
+        problem.setProperty("errors", Map.of("ownerEmail", exception.getMessage()));
         return problem;
     }
 

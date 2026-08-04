@@ -52,7 +52,7 @@ public class SubscriptionPlanRepository {
                 INSERT INTO subscription_plans (
                     id, plan_code, plan_name, billing_period, price_amount,
                     currency, limits_json, features_json, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?)
                 """,
                 id,
                 planCode,
@@ -80,8 +80,8 @@ public class SubscriptionPlanRepository {
                 """
                 UPDATE subscription_plans
                 SET plan_code = ?, plan_name = ?, billing_period = ?,
-                    price_amount = ?, currency = ?, limits_json = ?,
-                    features_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP(3)
+                    price_amount = ?, currency = ?, limits_json = CAST(? AS jsonb),
+                    features_json = CAST(? AS jsonb), status = ?, updated_at = CURRENT_TIMESTAMP(3)
                 WHERE id = ?
                 """,
                 planCode,

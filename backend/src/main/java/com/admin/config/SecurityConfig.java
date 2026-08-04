@@ -27,7 +27,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableMethodSecurity
 @EnableConfigurationProperties({
         AdminSecurityProperties.class,
-        PlatformOwnerBootstrapProperties.class
+        PlatformOwnerBootstrapProperties.class,
+        AdminMailProperties.class
 })
 public class SecurityConfig {
 

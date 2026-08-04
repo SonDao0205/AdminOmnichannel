@@ -8,12 +8,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record CreateTenantRequest(
-        @NotBlank(message = "Mã tenant không được để trống.")
-        @Pattern(
-                regexp = "^[A-Za-z][A-Za-z0-9_]{2,49}$",
-                message = "Mã tenant phải dài 3-50 ký tự, bắt đầu bằng chữ và chỉ chứa chữ, số hoặc dấu gạch dưới.")
-        String tenantCode,
-
         @NotBlank(message = "Tên tenant không được để trống.")
         @Size(min = 2, max = 255, message = "Tên tenant phải có từ 2 đến 255 ký tự.")
         String tenantName,
@@ -55,7 +49,6 @@ public record CreateTenantRequest(
         String ownerDisplayName
 ) {
     public CreateTenantRequest {
-        tenantCode = normalizeUpper(tenantCode);
         tenantName = normalize(tenantName);
         legalName = normalize(legalName);
         contactEmail = normalizeLower(contactEmail);

@@ -12,7 +12,7 @@ public record CreateTenantResponse(
         String ownerUserId,
         String ownerEmail,
         String assignedRole,
-        String temporaryPassword,
+        boolean credentialsEmailSent,
         boolean mustChangePassword
 ) {
 }

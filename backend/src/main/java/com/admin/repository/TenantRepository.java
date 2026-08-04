@@ -3,21 +3,27 @@ package com.admin.repository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.admin.entity.SubscriptionPlan;
 import com.admin.entity.SystemRole;
+import com.admin.entity.TenantAccessState;
 import com.admin.entity.TenantSummary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 public class TenantRepository {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    public TenantRepository(JdbcTemplate jdbcTemplate) {
+    public TenantRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public boolean tenantCodeExists(String tenantCode) {
@@ -26,6 +32,100 @@ public class TenantRepository {
                 Integer.class,
                 tenantCode);
         return count != null && count > 0;
+    }
+
+    public boolean ownerEmailExists(String ownerEmail) {
+        Integer count = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM tenant_users
+                WHERE LOWER(email) = LOWER(?)
+                  AND deleted_at IS NULL
+                """,
+                Integer.class,
+                ownerEmail);
+        return count != null && count > 0;
+    }
+
+    public Optional<TenantAccessState> findTenantAccessState(String tenantId) {
+        return jdbcTemplate.query(
+                        """
+                        SELECT t.id, t.status AS tenant_status,
+                               COALESCE((
+                                   SELECT ts.status
+                                   FROM tenant_subscriptions ts
+                                   WHERE ts.tenant_id = t.id
+                                   ORDER BY ts.created_at DESC
+                                   LIMIT 1
+                               ), '') AS subscription_status
+                        FROM tenants t
+                        WHERE t.id = ? AND t.deleted_at IS NULL
+                        """,
+                        (resultSet, rowNumber) -> new TenantAccessState(
+                                resultSet.getString("id"),
+                                resultSet.getString("tenant_status"),
+                                resultSet.getString("subscription_status")),
+                        tenantId)
+                .stream()
+                .findFirst();
+    }
+
+    public void updateTenantAccessStatus(String tenantId, String status, Instant now) {
+        jdbcTemplate.update(
+                """
+                UPDATE tenants
+                SET status = ?,
+                    suspended_at = CASE WHEN ? = 'SUSPENDED' THEN ? ELSE NULL END,
+                    updated_at = ?
+                WHERE id = ? AND deleted_at IS NULL
+                """,
+                status,
+                status,
+                Timestamp.from(now),
+                Timestamp.from(now),
+                tenantId);
+    }
+
+    public int revokeTenantSessions(String tenantId, Instant now) {
+        return jdbcTemplate.update(
+                """
+                UPDATE login_sessions
+                SET revoked_at = ?
+                WHERE revoked_at IS NULL
+                  AND tenant_user_id IN (
+                      SELECT id FROM tenant_users WHERE tenant_id = ? AND deleted_at IS NULL
+                  )
+                """,
+                Timestamp.from(now),
+                tenantId);
+    }
+
+    public void insertTenantAccessAudit(
+            String tenantId,
+            String adminId,
+            String ipAddress,
+            boolean locked,
+            String resultingStatus,
+            int revokedSessions
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO security_audit_logs (
+                    tenant_id, actor_type, actor_id, action_code,
+                    target_type, target_id, result, ip_address, metadata_json
+                ) VALUES (
+                    ?, 'PLATFORM_ADMIN', ?, ?, 'TENANT', ?,
+                    'SUCCEEDED', ?, CAST(? AS jsonb)
+                )
+                """,
+                tenantId,
+                adminId,
+                locked ? "TENANT_LOCK" : "TENANT_UNLOCK",
+                tenantId,
+                ipAddress,
+                toJson(Map.of(
+                        "resulting_status", resultingStatus,
+                        "revoked_sessions", revokedSessions)));
     }
 
     public Optional<SubscriptionPlan> findActivePlan(String planCode) {
@@ -51,7 +151,7 @@ public class TenantRepository {
                         FROM roles
                         WHERE role_code = ?
                           AND tenant_id IS NULL
-                          AND is_system = 1
+                          AND is_system = TRUE
                         LIMIT 1
                         """,
                         (resultSet, rowNumber) -> new SystemRole(
@@ -190,7 +290,7 @@ public class TenantRepository {
                     provisioned_by_admin_id, provisioned_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, 'TRIAL', ?, ?,
-                    JSON_OBJECT('first_login_password_change_required', TRUE),
+                    CAST(? AS jsonb),
                     ?, ?
                 )
                 """,
@@ -201,6 +301,7 @@ public class TenantRepository {
                 contactEmail,
                 timezone,
                 currency,
+                "{\"first_login_password_change_required\":true}",
                 adminId,
                 Timestamp.from(now));
     }
@@ -257,7 +358,7 @@ public class TenantRepository {
                 INSERT INTO tenant_user_credentials (
                     tenant_user_id, password_hash, password_algorithm,
                     must_change_password, credential_version
-                ) VALUES (?, ?, 'ARGON2ID', 1, 1)
+                ) VALUES (?, ?, 'ARGON2ID', TRUE, 1)
                 """,
                 ownerUserId,
                 passwordHash);
@@ -294,13 +395,13 @@ public class TenantRepository {
                     id, tenant_id, data_category, retention_days,
                     encrypt_at_rest, redact_in_logs, allow_ai_processing,
                     purge_enabled, policy_version
-                ) VALUES (?, ?, ?, ?, 1, 1, ?, 1, 'v1')
+                ) VALUES (?, ?, ?, ?, TRUE, TRUE, ?, TRUE, 'v1')
                 """,
                 policyId,
                 tenantId,
                 category,
                 retentionDays,
-                allowAiProcessing ? 1 : 0);
+                allowAiProcessing);
     }
 
     public void insertProvisioningAudit(
@@ -318,20 +419,25 @@ public class TenantRepository {
                     target_type, target_id, result, ip_address, metadata_json
                 ) VALUES (
                     ?, 'PLATFORM_ADMIN', ?, 'TENANT_PROVISION', 'TENANT', ?,
-                    'SUCCEEDED', ?, JSON_OBJECT(
-                        'tenant_code', ?,
-                        'subscription_plan', ?,
-                        'owner_role', ?
-                    )
+                    'SUCCEEDED', ?, CAST(? AS jsonb)
                 )
                 """,
                 tenantId,
                 adminId,
                 tenantId,
                 ipAddress,
-                tenantCode,
-                planCode,
-                roleCode);
+                toJson(Map.of(
+                        "tenant_code", tenantCode,
+                        "subscription_plan", planCode,
+                        "owner_role", roleCode)));
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Could not serialize audit metadata", exception);
+        }
     }
 
     private Instant toInstant(Timestamp value) {

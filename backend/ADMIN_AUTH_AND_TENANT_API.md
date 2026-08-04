@@ -8,6 +8,8 @@ Backend này chỉ dành cho **platform owner**. Nó cung cấp:
 - Argon2id cho mật khẩu.
 - Giới hạn đăng nhập theo IP và khóa tài khoản tạm thời.
 - Tạo tenant, gói thuê, tenant manager, credential, role và PII policy trong một transaction.
+- Tự sinh mã tenant, gửi mật khẩu tạm thời qua SMTP và không trả plaintext qua API.
+- Khóa/mở tenant, thu hồi phiên đăng nhập khi khóa và ghi audit đầy đủ.
 - Audit đăng nhập, đăng xuất và cấp tenant.
 
 ## Cấu trúc source code
@@ -28,7 +30,7 @@ src/main/java/com/admin/
 Quy tắc phụ thuộc:
 
 ```text
-Controller → Service interface → Service implementation → Repository → MySQL
+Controller → Service interface → Service implementation → Repository → PostgreSQL
                        │
                        └── Security/domain utilities
 ```
@@ -43,16 +45,36 @@ Backend local đọc trực tiếp cấu hình từ:
 src/main/resources/application.properties
 ```
 
-Thay giá trị sau bằng mật khẩu MySQL local:
+Thiết lập URL và tài khoản PostgreSQL local bằng biến môi trường:
 
 ```properties
-spring.datasource.password=CHANGE_ME_MYSQL_PASSWORD
+DB_URL=jdbc:postgresql://localhost:5432/omnichannel_pos
+DB_USERNAME=postgres
+DB_PASSWORD=CHANGE_ME_POSTGRES_PASSWORD
 ```
+
+Cấu hình máy chủ gửi email:
+
+```properties
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USERNAME=no-reply@example.com
+MAIL_PASSWORD=CHANGE_ME_SMTP_PASSWORD
+MAIL_SMTP_AUTH=true
+MAIL_STARTTLS=true
+ADMIN_MAIL_FROM=no-reply@example.com
+TENANT_LOGIN_URL=https://app.example.com/login
+```
+
+Không lưu mật khẩu SMTP thật trong Git. Hãy truyền các giá trị này bằng biến
+môi trường hoặc secret manager. Ở local có thể dùng SMTP test chạy tại
+`localhost:1025`; nếu SMTP từ chối người nhận hoặc không kết nối được thì yêu
+cầu tạo tenant trả lỗi và toàn bộ dữ liệu vừa tạo được rollback.
 
 Kiểm tra mật khẩu trước khi chạy:
 
 ```bash
-mysql -h 127.0.0.1 -P 3306 -u root -p
+psql -h 127.0.0.1 -p 5432 -U postgres -d omnichannel_pos -c "SELECT 1"
 ```
 
 Tài khoản platform owner local được tạo từ các thuộc tính:
@@ -146,7 +168,6 @@ X-XSRF-TOKEN: csrf-token
 Cookie: XSRF-TOKEN=...; omni_admin_session=...
 
 {
-  "tenantCode": "SHOP_001",
   "tenantName": "Cửa hàng số 1",
   "legalName": "Công ty TNHH Cửa hàng số 1",
   "contactEmail": "contact@shop1.example",
@@ -169,8 +190,35 @@ API tạo đồng thời:
 6. Tám bản ghi `data_protection_policies`
 7. `security_audit_logs`
 
-`temporaryPassword` chỉ được trả về trong response tạo tenant. Không log và
-không lưu plaintext. Tenant user bị buộc đổi mật khẩu ở lần đăng nhập đầu.
+Backend tự tạo `tenantCode` theo dạng `TEN_XXXXXXXXXXXX`. Trước khi tạo, hệ
+thống kiểm tra định dạng email và email đã được dùng trong `tenant_users` hay
+chưa. Mật khẩu tạm thời chỉ được gửi đến `ownerEmail`, không xuất hiện trong
+response, log hoặc cơ sở dữ liệu dạng plaintext. Tenant user bị buộc đổi mật
+khẩu ở lần đăng nhập đầu.
+
+Khóa tenant và thu hồi các phiên đăng nhập hiện tại:
+
+```http
+PATCH /api/admin/tenants/{tenantId}/access
+Content-Type: application/json
+X-XSRF-TOKEN: csrf-token
+
+{ "locked": true }
+```
+
+Mở lại tenant:
+
+```http
+PATCH /api/admin/tenants/{tenantId}/access
+Content-Type: application/json
+X-XSRF-TOKEN: csrf-token
+
+{ "locked": false }
+```
+
+Khi mở, trạng thái tenant được khôi phục thành `TRIAL` hoặc `ACTIVE` dựa trên
+subscription mới nhất. Tenant có subscription không hợp lệ hoặc đã `CLOSED`
+sẽ không được mở lại bằng API này.
 
 ### Quản lý gói dịch vụ
 
