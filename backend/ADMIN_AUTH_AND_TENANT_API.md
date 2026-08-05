@@ -50,7 +50,7 @@ Thiết lập URL và tài khoản PostgreSQL local bằng biến môi trường
 ```properties
 DB_URL=jdbc:postgresql://localhost:5432/omnichannel_pos
 DB_USERNAME=postgres
-DB_PASSWORD=CHANGE_ME_POSTGRES_PASSWORD
+DB_PASSWORD=<set-locally-outside-git>
 ```
 
 Cấu hình máy chủ gửi email:
@@ -59,7 +59,7 @@ Cấu hình máy chủ gửi email:
 MAIL_HOST=smtp.example.com
 MAIL_PORT=587
 MAIL_USERNAME=no-reply@example.com
-MAIL_PASSWORD=CHANGE_ME_SMTP_PASSWORD
+MAIL_PASSWORD=<set-locally-outside-git>
 MAIL_SMTP_AUTH=true
 MAIL_STARTTLS=true
 ADMIN_MAIL_FROM=no-reply@example.com
@@ -80,10 +80,10 @@ psql -h 127.0.0.1 -p 5432 -U postgres -d omnichannel_pos -c "SELECT 1"
 Tài khoản platform owner local được tạo từ các thuộc tính:
 
 ```properties
-app.admin.bootstrap.enabled=true
-app.admin.bootstrap.email=admin@omnichannel.local
-app.admin.bootstrap.password=Local-Admin-ChangeMe-2026!
-app.admin.bootstrap.display-name=Platform Owner
+APP_ADMIN_BOOTSTRAP_ENABLED=true
+APP_ADMIN_BOOTSTRAP_EMAIL=<platform-owner-email>
+APP_ADMIN_BOOTSTRAP_PASSWORD=<set-locally-outside-git>
+APP_ADMIN_BOOTSTRAP_DISPLAY_NAME=Platform Owner
 ```
 
 Đổi mật khẩu bootstrap trước lần chạy thành công đầu tiên.
