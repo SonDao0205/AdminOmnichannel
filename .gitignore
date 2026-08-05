@@ -1,0 +1,10 @@
+# macOS
+**/.DS_Store
+
+# IntelliJ IDEA
+.idea/
+**/.idea/
+
+# Local environment files
+.env
+**/.env
