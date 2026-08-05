@@ -3,14 +3,19 @@ package com.admin.service.impl;
 import com.admin.config.AdminMailProperties;
 import com.admin.exception.TenantEmailDeliveryException;
 import com.admin.service.TenantCredentialEmailService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+
+
 @Service
 public class SmtpTenantCredentialEmailService implements TenantCredentialEmailService {
-
+    private static final Logger log =
+            (Logger) LoggerFactory.getLogger(SmtpTenantCredentialEmailService.class);
     private final JavaMailSender mailSender;
     private final AdminMailProperties properties;
 
@@ -59,9 +64,16 @@ public class SmtpTenantCredentialEmailService implements TenantCredentialEmailSe
         try {
             mailSender.send(message);
         } catch (MailException exception) {
+            log.error(
+                    "Failed to send tenant credential email via configured SMTP server: {}",
+                    exception.getMessage(),
+                    exception
+            );
+
             throw new TenantEmailDeliveryException(
                     "Không thể gửi mật khẩu đến email này. Vui lòng kiểm tra địa chỉ email hoặc cấu hình máy chủ gửi thư.",
-                    exception);
+                    exception
+            );
         }
     }
 }
