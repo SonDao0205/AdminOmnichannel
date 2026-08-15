@@ -99,7 +99,7 @@ export default function Sidebar() {
             <ShopOutlined />
           </span>
           <span className="app-logo-copy">
-            <strong>OMNICHANNEL</strong>
+            <strong>SMARTHUB</strong>
             <small>MANAGEMENT SUITE</small>
           </span>
         </NavLink>
@@ -144,7 +144,7 @@ export default function Sidebar() {
           <span className="app-profile-avatar">{initials}</span>
           <span className="app-profile-copy">
             <strong>{admin?.displayName ?? 'Quản trị viên'}</strong>
-            <small>{admin?.email ?? 'OmnichannelPOS'}</small>
+            <small>{admin?.email ?? 'SmartHub'}</small>
           </span>
           <DownOutlined className={`app-profile-arrow ${showDropdown ? 'rotate-180' : ''}`} />
         </button>

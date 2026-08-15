@@ -38,7 +38,7 @@ public class SmtpTenantCredentialEmailService implements TenantCredentialEmailSe
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(properties.getFrom());
         message.setTo(recipientEmail);
-        message.setSubject("[OmnichannelPOS] Thông tin đăng nhập tenant " + tenantCode);
+        message.setSubject("[SmartHub] Thông tin đăng nhập tenant " + tenantCode);
         message.setText("""
                 Xin chào %s,
 
@@ -53,7 +53,7 @@ public class SmtpTenantCredentialEmailService implements TenantCredentialEmailSe
                 Vì lý do bảo mật, vui lòng đăng nhập và đổi mật khẩu ngay lần đầu sử dụng.
                 Không chia sẻ email này hoặc mật khẩu tạm thời với người khác.
 
-                OmnichannelPOS
+                SmartHub
                 """.formatted(
                 recipientName,
                 tenantName,

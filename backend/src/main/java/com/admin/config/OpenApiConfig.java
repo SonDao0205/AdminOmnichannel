@@ -14,7 +14,7 @@ public class OpenApiConfig {
     OpenAPI adminOpenApi(AdminSecurityProperties properties) {
         return new OpenAPI()
                 .info(new Info()
-                        .title("OmnichannelPOS Platform Admin API")
+                        .title("SmartHub Platform Admin API")
                         .version("1.0.0")
                         .description("Platform-owner login and tenant provisioning API"))
                 .components(new Components().addSecuritySchemes(

@@ -61,7 +61,7 @@ export default function LoginScreen() {
         <div className="login-brand" aria-hidden="true">
           <span><ShopOutlined /></span>
         </div>
-        <p className="login-eyebrow">OmnichannelPOS</p>
+        <p className="login-eyebrow">SmartHub</p>
         <h1 id="login-title">Đăng nhập quản trị</h1>
         <p className="login-subtitle">
           Truy cập khu vực quản lý tài khoản thuê của hệ thống.
